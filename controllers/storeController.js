@@ -1,5 +1,19 @@
+const jwt = require('jsonwebtoken');
 const Home = require("../models/home");
 const User = require("../models/user");
+
+async function resolveUser(req) {
+  if (req.session?.user?._id) return req.session.user;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || 'havento_mobile_secret_key_2024');
+      const user = await User.findById(decoded.userId);
+      if (user) return user;
+    } catch (e) { return null; }
+  }
+  return null;
+}
 
 exports.getIndex = (req, res, next) => {
   console.log("Session Value: ", req.session);
@@ -40,15 +54,15 @@ exports.getBookings = (req, res, next) => {
 
 exports.getFavouriteList = async (req, res, next) => {
   try {
-    // Check if user is logged in
-    if (!req.session.user || !req.session.user._id) {
+    const authedUser = await resolveUser(req);
+    if (!authedUser) {
       return res.status(401).json({
         success: false,
         message: "Please login to view favorites"
       });
     }
 
-    const userId = req.session.user._id;
+    const userId = authedUser._id;
     const user = await User.findById(userId).populate('favourites');
     
     if (!user) {
@@ -77,8 +91,8 @@ exports.getFavouriteList = async (req, res, next) => {
 
 exports.postAddToFavourite = async (req, res, next) => {
   try {
-    // Check if user is logged in
-    if (!req.session.user || !req.session.user._id) {
+    const authedUser = await resolveUser(req);
+    if (!authedUser) {
       return res.status(401).json({
         success: false,
         message: "Please login to add favorites"
@@ -86,7 +100,7 @@ exports.postAddToFavourite = async (req, res, next) => {
     }
 
     const homeId = req.body.id;
-    const userId = req.session.user._id;
+    const userId = authedUser._id;
     const user = await User.findById(userId);
     
     if (!user) {
@@ -116,8 +130,8 @@ exports.postAddToFavourite = async (req, res, next) => {
 
 exports.postRemoveFromFavourite = async (req, res, next) => {
   try {
-    // Check if user is logged in
-    if (!req.session.user || !req.session.user._id) {
+    const authedUser = await resolveUser(req);
+    if (!authedUser) {
       return res.status(401).json({
         success: false,
         message: "Please login to remove favorites"
@@ -125,7 +139,7 @@ exports.postRemoveFromFavourite = async (req, res, next) => {
     }
 
     const homeId = req.params.homeId;
-    const userId = req.session.user._id;
+    const userId = authedUser._id;
     const user = await User.findById(userId);
     
     if (!user) {
