@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const Home = require("../models/home");
 const User = require("../models/user");
+const Booking = require("../models/booking");
 
 async function resolveUser(req) {
   if (req.session?.user?._id) return req.session.user;
@@ -42,14 +43,49 @@ exports.getHomes = (req, res, next) => {
   });
 };
 
-exports.getBookings = (req, res, next) => {
-  res.json({
-    success: true,
-    pageTitle: "My Bookings",
-    currentPage: "bookings",
-    isLoggedIn: req.isLoggedIn, 
-    user: req.session.user,
-  });
+exports.getBookings = async (req, res, next) => {
+  const user = await resolveUser(req);
+  if (!user) {
+    return res.status(401).json({ success: false, message: "Please login to view bookings" });
+  }
+  try {
+    const bookings = await Booking.find({ user: user._id }).populate('home').sort({ createdAt: -1 });
+    res.json({
+      success: true,
+      bookings: bookings,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Could not fetch bookings", error: err.message });
+  }
+};
+
+exports.postBooking = async (req, res, next) => {
+  const user = await resolveUser(req);
+  if (!user) {
+    return res.status(401).json({ success: false, message: "Please login to book a property" });
+  }
+  const { homeId } = req.body;
+  if (!homeId) {
+    return res.status(422).json({ success: false, message: "homeId is required" });
+  }
+  try {
+    const home = await Home.findById(homeId);
+    if (!home) {
+      return res.status(404).json({ success: false, message: "Property not found" });
+    }
+    const booking = await Booking.create({
+      user: user._id,
+      home: homeId,
+      status: 'confirmed',
+    });
+    res.status(201).json({
+      success: true,
+      message: "Booking confirmed",
+      booking: booking,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Could not create booking", error: err.message });
+  }
 };
 
 exports.getFavouriteList = async (req, res, next) => {
