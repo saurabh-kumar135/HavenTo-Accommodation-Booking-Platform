@@ -1,6 +1,10 @@
-// Core Module
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
+
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads', { recursive: true });
+}
 
 const express = require('express');
 const session = require('express-session');
