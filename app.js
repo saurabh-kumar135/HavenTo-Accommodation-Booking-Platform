@@ -75,14 +75,8 @@ const randomString = (length) => {
   return result;
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/");
-  },
-  filename: (req, file, cb) => {
-    cb(null, randomString(10) + '-' + file.originalname);
-  }
-});
+// GridFS: use memory storage — files are held in RAM briefly, then streamed into MongoDB
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   console.log('Incoming file:', file.originalname, 'mimetype:', file.mimetype);
@@ -100,8 +94,33 @@ const multerOptions = {
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true }));
 app.use(multer(multerOptions).array('photos', 5)); 
-app.use(express.static(path.join(rootDir, 'public')))
-app.use("/uploads", express.static(path.join(rootDir, 'uploads')))
+app.use(express.static(path.join(rootDir, 'public')));
+
+// ── GridFS image retrieval with static fallback ──────────────────────────────
+app.get('/uploads/:fileId', async (req, res, next) => {
+  try {
+    if (!app.locals.gfsBucket) {
+      return next();
+    }
+    if (!mongoose.Types.ObjectId.isValid(req.params.fileId)) {
+      return next();
+    }
+    const fileId = new mongoose.Types.ObjectId(req.params.fileId);
+    const files = await mongoose.connection.db.collection('photos.files').findOne({ _id: fileId });
+    if (!files) {
+      return next();
+    }
+    res.set('Content-Type', files.contentType || 'image/jpeg');
+    const downloadStream = app.locals.gfsBucket.openDownloadStream(fileId);
+    downloadStream.on('error', () => next());
+    downloadStream.pipe(res);
+  } catch (err) {
+    console.error('GridFS retrieval error:', err);
+    next();
+  }
+});
+
+app.use("/uploads", express.static(path.join(rootDir, 'uploads')));
 app.use("/host/uploads", express.static(path.join(rootDir, 'uploads')))
 app.use("/homes/uploads", express.static(path.join(rootDir, 'uploads')))
 
@@ -138,8 +157,12 @@ app.use(errorsController.pageNotFound);
 
 const PORT = process.env.PORT || 3009;
 
+let gfsBucket;
+
 mongoose.connect(DB_PATH).then(() => {
   console.log('Connected to Mongo');
+  gfsBucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'photos' });
+  app.locals.gfsBucket = gfsBucket;
   app.listen(PORT, () => {
     console.log(`Server running on address http://localhost:${PORT}`);
   });

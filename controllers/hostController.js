@@ -87,25 +87,43 @@ exports.postAddHome = async (req, res, next) => {
     });
   }
 
-  const photos = req.files.map(file => file.path);
+  try {
+    const gfsBucket = req.app.locals.gfsBucket;
+    if (!gfsBucket) {
+      return res.status(500).json({ success: false, message: "Storage not ready, try again shortly." });
+    }
 
-  const home = new Home({
-    houseName,
-    price,
-    location,
-    rating,
-    photos, 
-    description,
-    hostId: user?._id,
-  });
-  home.save().then(() => {
-    console.log("Home Saved successfully");
+    const uploadOne = (file) => new Promise((resolve, reject) => {
+      const uploadStream = gfsBucket.openUploadStream(file.originalname, {
+        contentType: file.mimetype,
+      });
+      uploadStream.end(file.buffer);
+      uploadStream.on('finish', () => resolve(uploadStream.id.toString()));
+      uploadStream.on('error', reject);
+    });
+
+    const photos = await Promise.all(req.files.map(uploadOne));
+
+    const home = new Home({
+      houseName,
+      price,
+      location,
+      rating,
+      photos,
+      description,
+      hostId: user?._id,
+    });
+    await home.save();
+    console.log("Home Saved successfully with GridFS photo IDs:", photos);
     res.status(201).json({
       success: true,
       message: "Home added successfully",
       home: home,
     });
-  });
+  } catch (err) {
+    console.error("GridFS upload error:", err);
+    res.status(500).json({ success: false, message: "Failed to upload images.", error: err.message });
+  }
 };
 
 exports.postEditHome = (req, res, next) => {
