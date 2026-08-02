@@ -60,6 +60,11 @@ exports.postAddHome = (req, res, next) => {
     return res.status(422).json({
       success: false,
       message: "No images provided",
+      debug: {
+        contentType: req.headers['content-type'],
+        bodyKeys: Object.keys(req.body || {}),
+        filesReceived: req.files,
+      },
     });
   }
 
