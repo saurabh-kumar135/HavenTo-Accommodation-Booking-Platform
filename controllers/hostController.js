@@ -96,7 +96,7 @@ exports.postAddHome = async (req, res, next) => {
     rating,
     photos, 
     description,
-    hostId: user ? user._id : undefined,
+    hostId: user?._id,
   });
   home.save().then(() => {
     console.log("Home Saved successfully");
