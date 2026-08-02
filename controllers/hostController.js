@@ -1,5 +1,20 @@
+const jwt = require('jsonwebtoken');
 const Home = require("../models/home");
+const User = require("../models/user");
 const fs = require("fs");
+
+async function resolveUser(req) {
+  if (req.session?.user?._id) return req.session.user;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || 'havento_mobile_secret_key_2024');
+      const user = await User.findById(decoded.userId);
+      if (user) return user;
+    } catch (e) { return null; }
+  }
+  return null;
+}
 
 exports.getAddHome = (req, res, next) => {
   res.json({
@@ -38,20 +53,23 @@ exports.getEditHome = (req, res, next) => {
   });
 };
 
-exports.getHostHomes = (req, res, next) => {
-  Home.find().then((registeredHomes) => {
+exports.getHostHomes = async (req, res, next) => {
+  const user = await resolveUser(req);
+  const filter = user ? { hostId: user._id } : {};
+  Home.find(filter).then((registeredHomes) => {
     res.json({
       success: true,
       registeredHomes: registeredHomes,
       pageTitle: "Host Homes List",
       currentPage: "host-homes",
-      isLoggedIn: req.isLoggedIn,
-      user: req.session.user,
+      isLoggedIn: !!user,
+      user: user,
     });
   });
 };
 
-exports.postAddHome = (req, res, next) => {
+exports.postAddHome = async (req, res, next) => {
+  const user = await resolveUser(req);
   const { houseName, price, location, description } = req.body;
   const rating = req.body.rating || 0;
   console.log('postAddHome req.body:', req.body);
@@ -78,6 +96,7 @@ exports.postAddHome = (req, res, next) => {
     rating,
     photos, 
     description,
+    hostId: user ? user._id : undefined,
   });
   home.save().then(() => {
     console.log("Home Saved successfully");

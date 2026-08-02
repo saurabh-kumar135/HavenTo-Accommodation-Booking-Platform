@@ -19,6 +19,10 @@ const homeSchema = mongoose.Schema({
   },
   photos: [String], 
   description: String,
+  hostId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
 });
 
 module.exports = mongoose.model("Home", homeSchema);
