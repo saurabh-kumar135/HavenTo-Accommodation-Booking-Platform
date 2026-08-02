@@ -53,8 +53,8 @@ exports.getHostHomes = (req, res, next) => {
 
 exports.postAddHome = (req, res, next) => {
   const { houseName, price, location, rating, description } = req.body;
-  console.log(houseName, price, location, rating, description);
-  console.log(req.files); 
+  console.log('postAddHome req.body:', req.body);
+  console.log('postAddHome req.files:', req.files); 
 
   if (!req.files || req.files.length === 0) {
     return res.status(422).json({
