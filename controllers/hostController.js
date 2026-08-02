@@ -52,7 +52,8 @@ exports.getHostHomes = (req, res, next) => {
 };
 
 exports.postAddHome = (req, res, next) => {
-  const { houseName, price, location, rating, description } = req.body;
+  const { houseName, price, location, description } = req.body;
+  const rating = req.body.rating || 0;
   console.log('postAddHome req.body:', req.body);
   console.log('postAddHome req.files:', req.files); 
 
