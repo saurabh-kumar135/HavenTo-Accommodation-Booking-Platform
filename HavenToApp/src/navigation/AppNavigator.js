@@ -100,6 +100,8 @@ export default function AppNavigator() {
               options={{ headerShown: true, title: 'My Properties', headerTintColor: '#ef4444' }} />
             <Stack.Screen name="AddEditHome" component={AddEditHomeScreen}
               options={{ headerShown: true, title: 'List a Property', headerTintColor: '#ef4444' }} />
+            <Stack.Screen name="LocationPicker" component={LocationPickerScreen}
+              options={{ headerShown: true, title: 'Pick Location', headerTintColor: '#ef4444' }} />
           </>
         ) : (
           // ── Auth stack ─────────────────────────────────────────────────
