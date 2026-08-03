@@ -19,8 +19,6 @@ const homeSchema = mongoose.Schema({
   },
   photos: [String],
   latitude: Number,
-  longitude: Number,
-  latitude: Number,
   longitude: Number, 
   description: String,
   hostId: {
