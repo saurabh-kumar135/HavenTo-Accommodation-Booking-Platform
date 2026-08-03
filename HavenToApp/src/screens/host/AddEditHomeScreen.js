@@ -42,12 +42,6 @@ export default function AddEditHomeScreen({ route, navigation }) {
     }
   }, [homeId]);
 
-  useEffect(() => {
-    if (route?.params?.pickedLocation) {
-      setLatitude(route.params.pickedLocation.latitude);
-      setLongitude(route.params.pickedLocation.longitude);
-    }
-  }, [route?.params?.pickedLocation]);
 
   const pickFromGallery = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -121,7 +115,12 @@ export default function AddEditHomeScreen({ route, navigation }) {
       <TextInput style={styles.input} placeholder="e.g. Cozy Beach Cottage" placeholderTextColor="#9ca3af" value={houseName} onChangeText={setHouseName} />
       <Text style={styles.label}>Location *</Text>
       <TextInput style={styles.input} placeholder="e.g. Goa, India" placeholderTextColor="#9ca3af" value={location} onChangeText={setLocation} />
-      <TouchableOpacity style={styles.mapBtn} onPress={() => navigation.navigate('LocationPicker', { returnTo: route.name })}>
+      <TouchableOpacity style={styles.mapBtn} onPress={() => navigation.navigate('LocationPicker', {
+        onPicked: (coords) => {
+          setLatitude(coords.latitude);
+          setLongitude(coords.longitude);
+        },
+      })}>
         <Text style={styles.mapBtnText}>
           {latitude != null && longitude != null
             ? `📍 Location set (${latitude.toFixed(4)}, ${longitude.toFixed(4)}) — tap to change`

@@ -46,12 +46,10 @@ export default function LocationPickerScreen({ navigation, route }) {
 
   const handleConfirm = () => {
     if (!selected) return;
-    const returnTo = route?.params?.returnTo || 'AddEditHome';
-    navigation.navigate({
-      name: returnTo,
-      params: { pickedLocation: selected },
-      merge: true,
-    });
+    if (route?.params?.onPicked) {
+      route.params.onPicked(selected);
+    }
+    navigation.goBack();
   };
 
   return (
