@@ -36,6 +36,9 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await loginApi(email, password);
       if (response.data.success) {
+        if (response.data.token) {
+          localStorage.setItem('havento_token', response.data.token);
+        }
         setUser(response.data.user);
         setIsLoggedIn(true);
         return { success: true };
@@ -52,11 +55,13 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       await logoutApi();
+      localStorage.removeItem('havento_token');
       setUser(null);
       setIsLoggedIn(false);
       return { success: true };
     } catch (error) {
       console.error('Error logging out:', error);
+      localStorage.removeItem('havento_token');
       return { success: false };
     }
   };
