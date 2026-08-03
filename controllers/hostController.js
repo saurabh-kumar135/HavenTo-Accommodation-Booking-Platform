@@ -193,21 +193,42 @@ exports.postEditHome = async (req, res, next) => {
   }
 };
 
-exports.postDeleteHome = (req, res, next) => {
+exports.postDeleteHome = async (req, res, next) => {
   const homeId = req.params.homeId;
   console.log("Came to delete ", homeId);
-  Home.findByIdAndDelete(homeId)
-    .then(() => {
-      res.json({
-        success: true,
-        message: "Home deleted successfully",
-      });
-    })
-    .catch((error) => {
-      console.log("Error while deleting ", error);
-      res.status(500).json({
-        success: false,
-        message: "Error deleting home",
-      });
+
+  try {
+    const home = await Home.findById(homeId);
+    if (!home) {
+      return res.status(404).json({ success: false, message: "Home not found" });
+    }
+
+    // Clean up GridFS photo files so deleting a property doesn't leak storage.
+    const gfsBucket = req.app.locals.gfsBucket;
+    if (gfsBucket && home.photos && home.photos.length > 0) {
+      for (const photoRef of home.photos) {
+        if (/^[0-9a-fA-F]{24}$/.test(photoRef)) {
+          try {
+            await gfsBucket.delete(new mongoose.Types.ObjectId(photoRef));
+          } catch (err) {
+            console.log("GridFS delete error during home delete (non-fatal):", err.message);
+          }
+        }
+        // Legacy disk-path photos on old homes are left alone, same as before --
+        // nothing to clean up there that matters.
+      }
+    }
+
+    await Home.findByIdAndDelete(homeId);
+    res.json({
+      success: true,
+      message: "Home deleted successfully",
     });
+  } catch (error) {
+    console.log("Error while deleting ", error);
+    res.status(500).json({
+      success: false,
+      message: "Error deleting home",
+    });
+  }
 };
