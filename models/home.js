@@ -17,7 +17,11 @@ const homeSchema = mongoose.Schema({
     type: Number,
     required: true,
   },
-  photos: [String], 
+  photos: [String],
+  latitude: Number,
+  longitude: Number,
+  latitude: Number,
+  longitude: Number, 
   description: String,
   hostId: {
     type: mongoose.Schema.Types.ObjectId,

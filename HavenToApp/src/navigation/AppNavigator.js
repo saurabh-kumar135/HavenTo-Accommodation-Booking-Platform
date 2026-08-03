@@ -21,6 +21,7 @@ import ProfileScreen    from '../screens/ProfileScreen';
 // Host Screens
 import HostHomeListScreen from '../screens/host/HostHomeListScreen';
 import AddEditHomeScreen  from '../screens/host/AddEditHomeScreen';
+import LocationPickerScreen from '../screens/host/LocationPickerScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab   = createBottomTabNavigator();

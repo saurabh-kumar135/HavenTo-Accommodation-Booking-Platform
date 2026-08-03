@@ -14,6 +14,8 @@ export default function AddEditHomeScreen({ route, navigation }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEdit);
+  const [latitude, setLatitude] = useState(null);
+  const [longitude, setLongitude] = useState(null);
 
   useEffect(() => {
     navigation.setOptions({ title: isEdit ? 'Edit Property' : 'List a Property' });
@@ -40,11 +42,33 @@ export default function AddEditHomeScreen({ route, navigation }) {
     }
   }, [homeId]);
 
-  const pickImages = async () => {
+  useEffect(() => {
+    if (route?.params?.pickedLocation) {
+      setLatitude(route.params.pickedLocation.latitude);
+      setLongitude(route.params.pickedLocation.longitude);
+    }
+  }, [route?.params?.pickedLocation]);
+
+  const pickFromGallery = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permission needed', 'Please allow photo access.'); return; }
+    if (!perm.granted) { Alert.alert('Permission needed', 'Please allow photo access to add property photos.'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({ allowsMultipleSelection: true, mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
-    if (!result.canceled) setPhotos(result.assets);
+    if (!result.canceled) setPhotos(prev => [...prev, ...result.assets]);
+  };
+
+  const takePhoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permission needed', 'Please allow camera access to take a property photo.'); return; }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    if (!result.canceled) setPhotos(prev => [...prev, ...result.assets]);
+  };
+
+  const pickImages = () => {
+    Alert.alert('Add Photos', 'Choose a photo source', [
+      { text: '📷 Take Photo', onPress: takePhoto },
+      { text: '🖼️ Choose from Gallery', onPress: pickFromGallery },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const handleSubmit = async () => {
@@ -64,6 +88,10 @@ export default function AddEditHomeScreen({ route, navigation }) {
       fd.append('location', location);
       fd.append('price', price);
       fd.append('description', description);
+      if (latitude != null && longitude != null) {
+        fd.append('latitude', latitude);
+        fd.append('longitude', longitude);
+      }
       photos.forEach((p, i) => {
         fd.append('photos', { uri: p.uri, name: `photo_${i}.jpg`, type: 'image/jpeg' });
       });
@@ -93,6 +121,13 @@ export default function AddEditHomeScreen({ route, navigation }) {
       <TextInput style={styles.input} placeholder="e.g. Cozy Beach Cottage" placeholderTextColor="#9ca3af" value={houseName} onChangeText={setHouseName} />
       <Text style={styles.label}>Location *</Text>
       <TextInput style={styles.input} placeholder="e.g. Goa, India" placeholderTextColor="#9ca3af" value={location} onChangeText={setLocation} />
+      <TouchableOpacity style={styles.mapBtn} onPress={() => navigation.navigate('LocationPicker', { returnTo: route.name })}>
+        <Text style={styles.mapBtnText}>
+          {latitude != null && longitude != null
+            ? `📍 Location set (${latitude.toFixed(4)}, ${longitude.toFixed(4)}) — tap to change`
+            : '📍 Pick Location on Map'}
+        </Text>
+      </TouchableOpacity>
       <Text style={styles.label}>Price per night (₹) *</Text>
       <TextInput style={styles.input} placeholder="e.g. 2500" placeholderTextColor="#9ca3af" value={price} onChangeText={setPrice} keyboardType="numeric" />
       <Text style={styles.label}>Description</Text>
@@ -114,6 +149,8 @@ const styles = StyleSheet.create({
   textarea: { height: 100, textAlignVertical: 'top' },
   photoBtn: { borderWidth: 1.5, borderColor: '#ef4444', borderRadius: 10, borderStyle: 'dashed', paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
   photoBtnText: { color: '#ef4444', fontWeight: '600', fontSize: 15 },
+  mapBtn: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginBottom: 16, backgroundColor: '#f3f4f6' },
+  mapBtnText: { color: '#374151', fontWeight: '600', fontSize: 14 },
   submitBtn: { backgroundColor: '#ef4444', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
   submitText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });

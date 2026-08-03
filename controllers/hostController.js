@@ -71,7 +71,7 @@ exports.getHostHomes = async (req, res, next) => {
 
 exports.postAddHome = async (req, res, next) => {
   const user = await resolveUser(req);
-  const { houseName, price, location, description } = req.body;
+  const { houseName, price, location, description, latitude, longitude } = req.body;
   const rating = req.body.rating || 0;
   console.log('postAddHome req.body:', req.body);
   console.log('postAddHome req.files:', req.files); 
@@ -112,6 +112,8 @@ exports.postAddHome = async (req, res, next) => {
       rating,
       photos,
       description,
+      latitude,
+      longitude,
       hostId: user?._id,
     });
     await home.save();
@@ -141,6 +143,8 @@ exports.postEditHome = async (req, res, next) => {
     home.location = location;
     home.rating = req.body.rating || home.rating || 0;
     home.description = description;
+    if (req.body.latitude != null && req.body.latitude !== "") home.latitude = req.body.latitude;
+    if (req.body.longitude != null && req.body.longitude !== "") home.longitude = req.body.longitude;
 
     if (req.files && req.files.length > 0) {
       const gfsBucket = req.app.locals.gfsBucket;

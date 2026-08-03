@@ -33,7 +33,14 @@
     },
     "plugins": [
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow HavenTo to access your photos to add property images.",
+          "cameraPermission": "Allow HavenTo to access your camera to take property photos."
+        }
+      ]
     ]
   }
 }
