@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "HavenTo",
+    "slug": "havento-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ef4444"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.havento.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ef4444"
+      },
+      "package": "com.havento.app",
+      "ndkVersion": "27.1.12297006",
+      "statusBar": {
+        "backgroundColor": "#ef4444",
+        "barStyle": "light-content",
+        "translucent": false
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font"
+    ]
+  }
+}
