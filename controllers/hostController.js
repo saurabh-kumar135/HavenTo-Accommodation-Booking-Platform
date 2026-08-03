@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const jwt = require('jsonwebtoken');
 const Home = require("../models/home");
 const User = require("../models/user");
@@ -126,45 +127,70 @@ exports.postAddHome = async (req, res, next) => {
   }
 };
 
-exports.postEditHome = (req, res, next) => {
-  const { id, houseName, price, location, rating, description } =
-    req.body;;
-  Home.findById(id)
-    .then((home) => {
-      home.houseName = houseName;
-      home.price = price;
-      home.location = location;
-      home.rating = rating;
-      home.description = description;
+exports.postEditHome = async (req, res, next) => {
+  const { id, houseName, price, location, rating, description } = req.body;
 
-      if (req.files && req.files.length > 0) {
-        
-        if (home.photos && home.photos.length > 0) {
-          home.photos.forEach(photoPath => {
-            fs.unlink(photoPath, (err) => {
-              if (err) console.log(err);
-            });
-          });
-        }
-        
-        home.photos = req.files.map(file => file.path);
+  try {
+    const home = await Home.findById(id);
+    if (!home) {
+      return res.status(404).json({ success: false, message: "Home not found" });
+    }
+
+    home.houseName = houseName;
+    home.price = price;
+    home.location = location;
+    home.rating = rating;
+    home.description = description;
+
+    if (req.files && req.files.length > 0) {
+      const gfsBucket = req.app.locals.gfsBucket;
+      if (!gfsBucket) {
+        return res.status(500).json({ success: false, message: "Storage not ready, try again shortly." });
       }
 
-      return home.save();
-    })
-    .then(() => {
-      res.json({
-        success: true,
-        message: "Home updated successfully",
+      // Remove old photos. New-style homes store GridFS ObjectId strings (24 hex
+      // chars); a couple of legacy homes still have old disk paths — handle both.
+      if (home.photos && home.photos.length > 0) {
+        for (const photoRef of home.photos) {
+          if (/^[0-9a-fA-F]{24}$/.test(photoRef)) {
+            try {
+              await gfsBucket.delete(new mongoose.Types.ObjectId(photoRef));
+            } catch (err) {
+              console.log("GridFS delete error (non-fatal):", err.message);
+            }
+          } else {
+            fs.unlink(photoRef, (err) => {
+              if (err) console.log("Legacy disk unlink error (non-fatal):", err.message);
+            });
+          }
+        }
+      }
+
+      // Same GridFS upload pattern as postAddHome.
+      const uploadOne = (file) => new Promise((resolve, reject) => {
+        const uploadStream = gfsBucket.openUploadStream(file.originalname, {
+          contentType: file.mimetype,
+        });
+        uploadStream.end(file.buffer);
+        uploadStream.on('finish', () => resolve(uploadStream.id.toString()));
+        uploadStream.on('error', reject);
       });
-    })
-    .catch((err) => {
-      console.log("Error while updating home:", err);
-      res.status(500).json({
-        success: false,
-        message: "Error updating home",
-      });
+
+      home.photos = await Promise.all(req.files.map(uploadOne));
+    }
+
+    await home.save();
+    res.json({
+      success: true,
+      message: "Home updated successfully",
     });
+  } catch (err) {
+    console.log("Error while updating home:", err);
+    res.status(500).json({
+      success: false,
+      message: "Error updating home",
+    });
+  }
 };
 
 exports.postDeleteHome = (req, res, next) => {
