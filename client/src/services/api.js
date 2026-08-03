@@ -10,6 +10,14 @@ const api = axios.create({
   },
 });
 
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('havento_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export const checkSession = () => api.get('/api/auth/check-session');
 export const login = (email, password) => api.post('/api/auth/login', { email, password });
 export const signup = (userData) => api.post('/api/auth/signup', userData);
