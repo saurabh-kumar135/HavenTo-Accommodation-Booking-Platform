@@ -66,7 +66,8 @@ const userSchema = mongoose.Schema({
     default: false
   },
   emailVerificationOTP: String,
-  emailVerificationExpires: Date
+  emailVerificationExpires: Date,
+  pushToken: String
 });
 
 module.exports = mongoose.model('User', userSchema);

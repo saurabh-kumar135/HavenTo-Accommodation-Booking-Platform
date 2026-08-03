@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const Home = require("../models/home");
 const User = require("../models/user");
 const Booking = require("../models/booking");
+const { sendPushNotification } = require("../utils/pushNotifications");
 
 async function resolveUser(req) {
   if (req.session?.user?._id) return req.session.user;
@@ -78,6 +79,35 @@ exports.postBooking = async (req, res, next) => {
       home: homeId,
       status: 'confirmed',
     });
+
+    // Push notifications — best-effort, never blocks the booking response
+    (async () => {
+      try {
+        const [freshGuest, host] = await Promise.all([
+          User.findById(user._id),
+          home.hostId ? User.findById(home.hostId) : null,
+        ]);
+        if (freshGuest?.pushToken) {
+          await sendPushNotification(
+            freshGuest.pushToken,
+            "Booking Confirmed",
+            `Your booking for ${home.houseName} is confirmed.`,
+            { bookingId: booking._id.toString() }
+          );
+        }
+        if (host?.pushToken) {
+          await sendPushNotification(
+            host.pushToken,
+            "New Booking",
+            `${freshGuest?.firstName || 'A guest'} booked ${home.houseName}.`,
+            { bookingId: booking._id.toString() }
+          );
+        }
+      } catch (pushErr) {
+        console.error('Push notification error (non-fatal):', pushErr);
+      }
+    })();
+
     res.status(201).json({
       success: true,
       message: "Booking confirmed",

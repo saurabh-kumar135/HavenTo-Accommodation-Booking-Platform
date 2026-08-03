@@ -198,3 +198,20 @@ exports.postLogout = (req, res, next) => {
     });
   })
 }
+
+exports.registerPushToken = async (req, res) => {
+  const user = await resolveUser(req);
+  if (!user) {
+    return res.status(401).json({ success: false, message: "Please login" });
+  }
+  const { pushToken } = req.body;
+  if (!pushToken) {
+    return res.status(422).json({ success: false, message: "pushToken is required" });
+  }
+  try {
+    await User.findByIdAndUpdate(user._id, { pushToken });
+    res.status(200).json({ success: true, message: "Push token registered" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Could not register push token", error: err.message });
+  }
+};

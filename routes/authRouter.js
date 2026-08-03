@@ -79,4 +79,6 @@ authRouter.get('/api/auth/mobile/me', async (req, res) => {
     } catch (err) { res.status(401).json({ success: false, error: 'Invalid token.' }); }
 });
 
+authRouter.post('/api/auth/push-token', authController.registerPushToken);
+
 module.exports = authRouter;
