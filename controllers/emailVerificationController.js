@@ -106,7 +106,9 @@ exports.verifyOTP = async (req, res) => {
     removePendingVerification(email);
 
     req.session.isLoggedIn = true;
-    req.session.user = newUser;
+    const sessionUser = newUser.toObject ? newUser.toObject() : { ...newUser };
+    delete sessionUser.password;
+    req.session.user = sessionUser;
 
     res.json({
       success: true,

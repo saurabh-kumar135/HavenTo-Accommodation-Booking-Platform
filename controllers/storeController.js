@@ -9,7 +9,7 @@ async function resolveUser(req) {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     try {
       const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || 'havento_mobile_secret_key_2024');
-      const user = await User.findById(decoded.userId);
+      const user = await User.findById(decoded.userId).select('-password');
       if (user) return user;
     } catch (e) { return null; }
   }

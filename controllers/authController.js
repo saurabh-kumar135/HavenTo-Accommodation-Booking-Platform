@@ -28,7 +28,7 @@ async function resolveUser(req) {
     try {
       const jwt = require('jsonwebtoken');
       const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || 'havento_mobile_secret_key_2024');
-      const user = await User.findById(decoded.userId);
+      const user = await User.findById(decoded.userId).select('-password');
       if (user) return user;
     } catch (e) { return null; }
   }
@@ -165,7 +165,9 @@ exports.postLogin = async (req, res, next) => {
   }
 
   req.session.isLoggedIn = true;
-  req.session.user = user;
+  const sessionUser = user.toObject ? user.toObject() : { ...user };
+  delete sessionUser.password;
+  req.session.user = sessionUser;
   await req.session.save();
 
   const token = jwt.sign(
