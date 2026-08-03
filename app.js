@@ -8,7 +8,7 @@ if (!fs.existsSync('uploads')) {
 
 const express = require('express');
 const session = require('express-session');
-const MongoDBStore = require('connect-mongodb-session')(session);
+const MongoStore = require('connect-mongo');
 const { default: mongoose } = require('mongoose');
 const multer = require('multer');
 const cors = require('cors');
@@ -61,9 +61,9 @@ app.use(cors({
   credentials: true
 }));
 
-const store = new MongoDBStore({
-  uri: DB_PATH,
-  collection: 'sessions'
+const store = MongoStore.create({
+  mongoUrl: DB_PATH,
+  collectionName: 'sessions'
 });
 
 const randomString = (length) => {
