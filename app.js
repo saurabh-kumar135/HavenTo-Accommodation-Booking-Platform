@@ -8,7 +8,7 @@ if (!fs.existsSync('uploads')) {
 
 const express = require('express');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
+const { MongoStore } = require('connect-mongo');
 const { default: mongoose } = require('mongoose');
 const multer = require('multer');
 const cors = require('cors');
