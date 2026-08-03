@@ -1,4 +1,5 @@
 const { check, validationResult } = require("express-validator");
+const jwt = require('jsonwebtoken');
 const User = require("../models/user");
 const bcrypt = require("bcryptjs");
 
@@ -20,17 +21,32 @@ exports.getSignup = (req, res, next) => {
   });
 };
 
-exports.checkSession = (req, res, next) => {
-  if (req.isLoggedIn && req.session.user) {
+async function resolveUser(req) {
+  if (req.session?.user?._id) return req.session.user;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || 'havento_mobile_secret_key_2024');
+      const user = await User.findById(decoded.userId);
+      if (user) return user;
+    } catch (e) { return null; }
+  }
+  return null;
+}
+
+exports.checkSession = async (req, res, next) => {
+  const user = await resolveUser(req);
+  if (user) {
     res.json({
       success: true,
       isLoggedIn: true,
       user: {
-        _id: req.session.user._id,
-        firstName: req.session.user.firstName,
-        lastName: req.session.user.lastName,
-        email: req.session.user.email,
-        userType: req.session.user.userType,
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        userType: user.userType,
       },
     });
   } else {
@@ -152,9 +168,16 @@ exports.postLogin = async (req, res, next) => {
   req.session.user = user;
   await req.session.save();
 
+  const token = jwt.sign(
+    { userId: user._id },
+    process.env.JWT_SECRET || 'havento_mobile_secret_key_2024',
+    { expiresIn: '30d' }
+  );
+
   res.json({
     success: true,
     message: "Login successful",
+    token,
     user: {
       _id: user._id,
       firstName: user.firstName,
