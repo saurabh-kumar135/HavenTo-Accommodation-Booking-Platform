@@ -98,6 +98,7 @@ app.use(express.static(path.join(rootDir, 'public')));
 
 // ── GridFS image retrieval with static fallback ──────────────────────────────
 app.get('/uploads/:fileId', async (req, res, next) => {
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
   try {
     if (!app.locals.gfsBucket) {
       return next();
@@ -120,7 +121,7 @@ app.get('/uploads/:fileId', async (req, res, next) => {
   }
 });
 
-app.use("/uploads", express.static(path.join(rootDir, 'uploads')));
+app.use("/uploads", (req, res, next) => { res.set('Cross-Origin-Resource-Policy', 'cross-origin'); next(); }, express.static(path.join(rootDir, 'uploads')));
 app.use("/host/uploads", express.static(path.join(rootDir, 'uploads')))
 app.use("/homes/uploads", express.static(path.join(rootDir, 'uploads')))
 
