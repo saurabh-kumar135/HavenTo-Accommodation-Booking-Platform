@@ -128,7 +128,7 @@ exports.postAddHome = async (req, res, next) => {
 };
 
 exports.postEditHome = async (req, res, next) => {
-  const { id, houseName, price, location, rating, description } = req.body;
+  const { id, houseName, price, location, description } = req.body;
 
   try {
     const home = await Home.findById(id);
@@ -139,7 +139,7 @@ exports.postEditHome = async (req, res, next) => {
     home.houseName = houseName;
     home.price = price;
     home.location = location;
-    home.rating = rating;
+    home.rating = req.body.rating || home.rating || 0;
     home.description = description;
 
     if (req.files && req.files.length > 0) {
