@@ -247,6 +247,23 @@ VITE_API_URL=http://localhost:3009
 
 ## 🌐 Deployment
 
+### Docker (local production-like stack)
+
+1. Install and start Docker Desktop.
+2. Copy `.env.docker.example` to `.env` and set a strong `SESSION_SECRET`.
+3. Start the application and its MongoDB dependency:
+
+```bash
+docker compose up --build -d
+```
+
+The API is available at `http://localhost:3009`; its readiness endpoint is
+`http://localhost:3009/health`. Stop the stack with `docker compose down`.
+MongoDB data is retained in the `mongo_data` Docker volume.
+
+Every pull request to `main` builds the image. Pushes to `main` also publish
+the image to GitHub Container Registry as `ghcr.io/<owner>/<repository>:latest`.
+
 ### Production Deployment
 
 **Frontend**: Deploy to Vercel
