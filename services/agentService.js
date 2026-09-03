@@ -2,7 +2,17 @@ const Groq = require("groq-sdk");
 const Home = require("../models/home");
 const Booking = require("../models/booking");
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Lazy initialization — don't crash the app if GROQ_API_KEY is missing
+let groq = null;
+function getGroqClient() {
+  if (!groq) {
+    if (!process.env.GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not set. Please add it to your environment variables.");
+    }
+    groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  }
+  return groq;
+}
 
 // ── Tool Definitions (what the AI agent can do) ─────────────────────────────
 const tools = [
@@ -183,7 +193,7 @@ Guidelines:
   ];
 
   // First call — may trigger tool calls
-  let response = await groq.chat.completions.create({
+  let response = await getGroqClient().chat.completions.create({
     model: "qwen/qwen3.8-27b",
     messages,
     tools,
@@ -226,7 +236,7 @@ Guidelines:
     }
 
     // Call the model again with tool results
-    response = await groq.chat.completions.create({
+    response = await getGroqClient().chat.completions.create({
       model: "qwen/qwen3.8-27b",
       messages,
       tools,
