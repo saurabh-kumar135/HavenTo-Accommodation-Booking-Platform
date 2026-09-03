@@ -4,6 +4,7 @@ import { getHomeDetails, addToFavourite, createBooking } from '../../services/ap
 import { useAuth } from '../../context/AuthContext';
 import Navbar from '../../components/Navbar';
 import { getImageUrl } from '../../config/api';
+import BookingModal from '../../components/BookingModal';
 
 const HomeDetail = () => {
   const { homeId } = useParams();
@@ -11,6 +12,7 @@ const HomeDetail = () => {
   const [loading, setLoading] = useState(true);
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0); 
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
 
@@ -40,16 +42,21 @@ const HomeDetail = () => {
     }
   };
 
-  const handleBookHome = async () => {
+  const handleOpenBookingModal = () => {
     if (!isLoggedIn) {
       alert('Please login to book a home');
       navigate('/login');
       return;
     }
+    setIsBookingModalOpen(true);
+  };
+
+  const handleConfirmBooking = async (bookingData) => {
     try {
-      const res = await createBooking(homeId);
+      const res = await createBooking(bookingData);
       if (res.data.success) {
-        alert('Booking confirmed!');
+        setIsBookingModalOpen(false);
+        alert('Booking confirmed successfully!');
         navigate('/bookings');
       }
     } catch (error) {
@@ -334,7 +341,7 @@ const HomeDetail = () => {
                 {isLoggedIn ? (
                   <>
                     <button 
-                      onClick={handleBookHome}
+                      onClick={handleOpenBookingModal}
                       className="w-full bg-[#A67C52] text-white px-6 py-3.5 rounded-xl hover:bg-[#8B6F47] transition font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-98"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
@@ -366,6 +373,13 @@ const HomeDetail = () => {
           </div>
         </div>
       </main>
+
+      <BookingModal 
+        isOpen={isBookingModalOpen}
+        home={home}
+        onClose={() => setIsBookingModalOpen(false)}
+        onConfirm={handleConfirmBooking}
+      />
     </>
   );
 };

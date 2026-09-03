@@ -5,10 +5,12 @@ import { useAuth } from '../../context/AuthContext';
 import Navbar from '../../components/Navbar';
 import HomeCard from '../../components/HomeCard';
 import Footer from '../../components/Footer';
+import BookingModal from '../../components/BookingModal';
 
 const Index = () => {
   const [homes, setHomes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedHomeForBooking, setSelectedHomeForBooking] = useState(null);
   const navigate = useNavigate();
   const { isLoggedIn } = useAuth();
 
@@ -80,16 +82,24 @@ const Index = () => {
     }
   };
 
-  const handleBookHome = async (homeId) => {
+  const handleOpenBookingModal = (homeId) => {
     if (!isLoggedIn) {
       alert('Please login to book a home');
       navigate('/login');
       return;
     }
+    const home = homes.find(h => h._id === homeId);
+    if (home) {
+      setSelectedHomeForBooking(home);
+    }
+  };
+
+  const handleConfirmBooking = async (bookingData) => {
     try {
-      const res = await createBooking(homeId);
+      const res = await createBooking(bookingData);
       if (res.data.success) {
-        alert('Booking confirmed!');
+        setSelectedHomeForBooking(null);
+        alert('Booking confirmed successfully!');
         navigate('/bookings');
       }
     } catch (error) {
@@ -254,13 +264,20 @@ const Index = () => {
                 showDetails={true}
                 showBook={isLoggedIn}
                 showFavourite={isLoggedIn}
-                onBook={handleBookHome}
+                onBook={handleOpenBookingModal}
                 onAddFavourite={handleAddFavourite}
               />
             ))}
           </div>
         )}
       </main>
+
+      <BookingModal 
+        isOpen={Boolean(selectedHomeForBooking)}
+        home={selectedHomeForBooking}
+        onClose={() => setSelectedHomeForBooking(null)}
+        onConfirm={handleConfirmBooking}
+      />
 
       {}
       <Footer />

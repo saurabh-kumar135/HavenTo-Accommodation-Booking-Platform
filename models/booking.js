@@ -16,6 +16,19 @@ const bookingSchema = mongoose.Schema({
     enum: ['pending', 'confirmed', 'cancelled'],
     default: 'confirmed',
   },
+  checkIn: {
+    type: Date,
+  },
+  checkOut: {
+    type: Date,
+  },
+  guests: {
+    type: Number,
+    default: 1,
+  },
+  totalPrice: {
+    type: Number,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

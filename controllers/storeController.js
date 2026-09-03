@@ -65,7 +65,7 @@ exports.postBooking = async (req, res, next) => {
   if (!user) {
     return res.status(401).json({ success: false, message: "Please login to book a property" });
   }
-  const { homeId } = req.body;
+  const { homeId, checkIn, checkOut, guests } = req.body;
   if (!homeId) {
     return res.status(422).json({ success: false, message: "homeId is required" });
   }
@@ -74,10 +74,22 @@ exports.postBooking = async (req, res, next) => {
     if (!home) {
       return res.status(404).json({ success: false, message: "Property not found" });
     }
+
+    let calculatedTotalPrice = home.price;
+    if (checkIn && checkOut) {
+      const diffTime = Math.abs(new Date(checkOut) - new Date(checkIn));
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+      calculatedTotalPrice = diffDays * home.price;
+    }
+
     const booking = await Booking.create({
       user: user._id,
       home: homeId,
       status: 'confirmed',
+      checkIn: checkIn ? new Date(checkIn) : undefined,
+      checkOut: checkOut ? new Date(checkOut) : undefined,
+      guests: Number(guests) || 1,
+      totalPrice: calculatedTotalPrice,
     });
 
     // Push notifications — best-effort, never blocks the booking response

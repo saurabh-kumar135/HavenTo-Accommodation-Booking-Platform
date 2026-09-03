@@ -27,7 +27,10 @@ export const getIndex = () => api.get('/api');
 export const getHomes = () => api.get('/api/homes');
 export const getHomeDetails = (homeId) => api.get(`/api/homes/${homeId}`);
 export const getBookings = () => api.get('/api/bookings');
-export const createBooking = (homeId) => api.post('/api/bookings', { homeId });
+export const createBooking = (data) => {
+  const payload = typeof data === 'string' ? { homeId: data } : data;
+  return api.post('/api/bookings', payload);
+};
 export const getFavourites = () => api.get('/api/favourites');
 export const addToFavourite = (homeId) => api.post('/api/favourites', { id: homeId });
 export const removeFromFavourite = (homeId) => api.post(`/api/favourites/delete/${homeId}`);
