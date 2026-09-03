@@ -1,0 +1,40 @@
+name: Deploy HavenTo to AWS EC2
+
+on:
+  push:
+    branches:
+      - main   # triggers whenever you push to main branch
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the latest code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: SSH into EC2 and deploy
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          port: 22
+          script: |
+            echo "=== Pulling latest code ==="
+            cd ~/havento
+            git pull origin main
+
+            echo "=== Installing dependencies ==="
+            npm install --omit=dev
+
+            echo "=== Restarting HavenTo service ==="
+            sudo systemctl restart havento-api
+
+            echo "=== Checking service status ==="
+            sudo systemctl status havento-api --no-pager
+
+            echo "=== Deployment complete! ==="
