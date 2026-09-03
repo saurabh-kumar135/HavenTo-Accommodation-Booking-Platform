@@ -86,7 +86,11 @@ async function executeTool(toolName, args, userId) {
     case "searchHomes": {
       const query = {};
       if (args.location) {
-        query.location = { $regex: args.location, $options: "i" };
+        // Search in both location and houseName fields
+        query.$or = [
+          { location: { $regex: args.location, $options: "i" } },
+          { houseName: { $regex: args.location, $options: "i" } },
+        ];
       }
       if (args.maxPrice) {
         query.price = { $lte: args.maxPrice };
@@ -97,11 +101,23 @@ async function executeTool(toolName, args, userId) {
 
       const homes = await Home.find(query)
         .sort({ rating: -1 })
-        .limit(5)
+        .limit(10)
         .lean();
 
       if (homes.length === 0) {
-        return { found: 0, message: "No homes found matching your criteria." };
+        // Fallback: return all homes so the agent can help
+        const allHomes = await Home.find().sort({ rating: -1 }).limit(5).lean();
+        return {
+          found: 0,
+          message: `No homes found matching "${args.location || 'your criteria'}". Here are some popular options instead.`,
+          suggestions: allHomes.map((h) => ({
+            id: h._id.toString(),
+            name: h.houseName,
+            price: h.price,
+            location: h.location,
+            rating: h.rating,
+          })),
+        };
       }
 
       return {
@@ -170,7 +186,9 @@ async function executeTool(toolName, args, userId) {
 
 // ── Main Agent Function ─────────────────────────────────────────────────────
 async function processMessage(userMessage, userId = null, chatHistory = []) {
-  const systemPrompt = `You are HavenTo AI — a friendly and helpful accommodation booking assistant.
+  const systemPrompt = `You are HavenTo Assistant — a helpful accommodation booking assistant.
+
+IMPORTANT: Always use the searchHomes tool when a user asks about homes, locations, or availability. Never guess — always search the database first.
 
 Your capabilities:
 - Search for homes/accommodations by location, price, and rating
@@ -178,12 +196,12 @@ Your capabilities:
 - Book properties for logged-in users
 
 Guidelines:
-- Be warm, helpful, and concise
-- When showing homes, present them in a clear numbered list with name, price, location, and rating
-- Always mention the home ID when listing results so the user can refer to specific ones
+- Be helpful and concise, no unnecessary filler
+- When showing homes, present them in a clean numbered list with name, price, location, and rating
+- Include the home ID so the user can refer to specific ones
 - If the user wants to book, confirm which property before booking
 - If the user asks something unrelated to accommodation/travel, politely redirect
-- Use emojis sparingly to keep things friendly 🏡
+- Do not use excessive emojis
 - Prices are in INR (₹)`;
 
   const messages = [
