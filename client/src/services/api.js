@@ -50,4 +50,7 @@ export const editHome = (formData) => {
 };
 export const deleteHome = (homeId) => api.post(`/api/host/delete-home/${homeId}`);
 
+// AI Agent
+export const chatAgent = (message, chatHistory = []) => api.post('/api/agent/chat', { message, chatHistory });
+
 export default api;

@@ -18,6 +18,7 @@ import AddEditHome from './pages/host/AddEditHome';
 import HostHomeList from './pages/host/HostHomeList';
 
 import NotFound from './pages/NotFound';
+import AIChatWidget from './components/AIChatWidget';
 
 import './index.css';
 
@@ -69,6 +70,8 @@ function App() {
             {}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          {/* AI Chat Widget - floating on all pages */}
+          <AIChatWidget />
         </div>
       </Router>
     </AuthProvider>
