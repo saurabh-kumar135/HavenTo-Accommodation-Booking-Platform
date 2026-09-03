@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getHomes, addToFavourite } from '../../services/api';
+import { getHomes, addToFavourite, createBooking } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import Navbar from '../../components/Navbar';
 import HomeCard from '../../components/HomeCard';
@@ -34,6 +34,27 @@ const HomeList = () => {
       navigate('/favourites'); 
     } catch (error) {
       console.error('Error adding to favourites:', error);
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
+    }
+  };
+
+  const handleBookHome = async (homeId) => {
+    if (!isLoggedIn) {
+      alert('Please login to book a home');
+      navigate('/login');
+      return;
+    }
+    try {
+      const res = await createBooking(homeId);
+      if (res.data.success) {
+        alert('Booking confirmed!');
+        navigate('/bookings');
+      }
+    } catch (error) {
+      console.error('Error booking home:', error);
+      alert(error.response?.data?.message || 'Failed to book home. Please try again.');
     }
   };
 
@@ -53,7 +74,9 @@ const HomeList = () => {
                 key={home._id} 
                 home={home}
                 showDetails={true}
+                showBook={isLoggedIn}
                 showFavourite={isLoggedIn}
+                onBook={handleBookHome}
                 onAddFavourite={handleAddFavourite}
               />
             ))}

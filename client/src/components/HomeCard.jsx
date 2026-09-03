@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { getImageUrl } from '../config/api';
 
-const HomeCard = ({ home, showDetails, showFavourite, showRemoveFavourite, showEdit, showDelete, onAddFavourite, onRemoveFavourite, onDelete }) => {
+const HomeCard = ({ home, showDetails, showFavourite, showBook, showRemoveFavourite, showEdit, showDelete, onAddFavourite, onBook, onRemoveFavourite, onDelete }) => {
   
   const getHomeImageUrl = () => {
     if (home.photos && home.photos.length > 0) {
@@ -37,6 +37,12 @@ const HomeCard = ({ home, showDetails, showFavourite, showRemoveFavourite, showE
         <div className="flex flex-wrap gap-2">
           {showDetails && (
             <Link to={`/homes/${home._id}`} className="bg-blue-300 p-2 hover:bg-blue-400">Details</Link>
+          )}
+
+          {showBook && onBook && (
+            <button onClick={() => onBook(home._id)} className="bg-[#A67C52] hover:bg-[#8B6F47] text-white p-2 font-medium">
+              Book Home
+            </button>
           )}
           
           {showFavourite && onAddFavourite && (

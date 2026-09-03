@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getHomeDetails, addToFavourite } from '../../services/api';
+import { getHomeDetails, addToFavourite, createBooking } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import Navbar from '../../components/Navbar';
 import { getImageUrl } from '../../config/api';
@@ -37,6 +37,24 @@ const HomeDetail = () => {
       navigate('/favourites');
     } catch (error) {
       console.error('Error adding to favourites:', error);
+    }
+  };
+
+  const handleBookHome = async () => {
+    if (!isLoggedIn) {
+      alert('Please login to book a home');
+      navigate('/login');
+      return;
+    }
+    try {
+      const res = await createBooking(homeId);
+      if (res.data.success) {
+        alert('Booking confirmed!');
+        navigate('/bookings');
+      }
+    } catch (error) {
+      console.error('Error booking home:', error);
+      alert(error.response?.data?.message || 'Failed to book home. Please try again.');
     }
   };
 
@@ -313,15 +331,34 @@ const HomeDetail = () => {
               </div>
               
               <div className="space-y-3">
-                {isLoggedIn && (
+                {isLoggedIn ? (
+                  <>
+                    <button 
+                      onClick={handleBookHome}
+                      className="w-full bg-[#A67C52] text-white px-6 py-3.5 rounded-xl hover:bg-[#8B6F47] transition font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-98"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.253 3.75m3 0h-16.5m16.5 0v11.25A2.25 2.25 0 0118 20.25H6a2.25 2.25 0 01-2.25-2.25V7.5m16.5 0v-1.5a2.25 2.25 0 00-2.25-2.25H6A2.25 2.25 0 003.75 6v1.5m16.5 0h-16.5" />
+                      </svg>
+                      Book Home Now
+                    </button>
+
+                    <button 
+                      onClick={handleAddFavourite}
+                      className="w-full bg-green-500 text-white px-6 py-3 rounded-xl hover:bg-green-600 transition font-semibold flex items-center justify-center gap-2"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                      </svg>
+                      Add to Favourite
+                    </button>
+                  </>
+                ) : (
                   <button 
-                    onClick={handleAddFavourite}
-                    className="w-full bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition font-semibold flex items-center justify-center gap-2"
+                    onClick={() => navigate('/login')}
+                    className="w-full bg-[#A67C52] text-white px-6 py-3.5 rounded-xl hover:bg-[#8B6F47] transition font-semibold flex items-center justify-center gap-2"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                    </svg>
-                    Add to Favourite
+                    Login to Book
                   </button>
                 )}
               </div>
