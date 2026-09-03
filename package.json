@@ -19,6 +19,7 @@
     "tailwindcss": "^3.4.13"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "bcryptjs": "^3.0.2",
     "body-parser": "^1.20.3",
     "connect-mongo": "^6.0.0",
@@ -31,6 +32,7 @@
     "express-rate-limit": "^8.2.1",
     "express-session": "^1.18.1",
     "express-validator": "^7.2.1",
+    "groq-sdk": "^1.6.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "mongodb": "^6.10.0",
