@@ -65,16 +65,72 @@ const tools = [
     function: {
       name: "createBooking",
       description:
-        "Book a home for the user. Use when the user confirms they want to book a specific property.",
+        "Book a home for the user. Use when the user confirms they want to book a specific property. Can accept homeId or houseName, check-in and check-out dates, and number of guests.",
       parameters: {
         type: "object",
         properties: {
           homeId: {
             type: "string",
-            description: "The MongoDB ObjectId of the home to book",
+            description: "The MongoDB ObjectId of the home to book (preferred)",
+          },
+          homeName: {
+            type: "string",
+            description: "The name of the home to book if homeId is not known",
+          },
+          checkIn: {
+            type: "string",
+            description: "Optional check-in date or range (e.g. 'Dec 25')",
+          },
+          checkOut: {
+            type: "string",
+            description: "Optional check-out date (e.g. 'Dec 28')",
+          },
+          guests: {
+            type: "number",
+            description: "Number of guests",
           },
         },
-        required: ["homeId"],
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "getUserBookings",
+      description:
+        "View all existing bookings for the current logged-in user. Use when the user asks 'What are my bookings?', 'Show my booked trips', or similar.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "manageFavourites",
+      description:
+        "Manage the user's favourite/saved homes. Can list saved favourites, add a home to favourites, or remove a home from favourites.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: {
+            type: "string",
+            enum: ["list", "add", "remove"],
+            description: "Action to take: 'list' to see saved homes, 'add' to save a home, 'remove' to remove from saved",
+          },
+          homeId: {
+            type: "string",
+            description: "The MongoDB ObjectId of the home (required for add or remove)",
+          },
+          homeName: {
+            type: "string",
+            description: "The name of the home (optional helper if homeId is not known)",
+          },
+        },
+        required: ["action"],
       },
     },
   },
@@ -134,9 +190,19 @@ async function executeTool(toolName, args, userId) {
     }
 
     case "getHomeDetails": {
-      const home = await Home.findById(args.homeId).lean();
+      let home = null;
+      if (args.homeId) {
+        try {
+          home = await Home.findById(args.homeId).lean();
+        } catch {
+          // In case user passed a name instead of ObjectId
+        }
+      }
+      if (!home && args.homeName) {
+        home = await Home.findOne({ houseName: { $regex: args.homeName, $options: "i" } }).lean();
+      }
       if (!home) {
-        return { error: "Home not found" };
+        return { error: "Home not found." };
       }
       return {
         id: home._id.toString(),
@@ -158,25 +224,133 @@ async function executeTool(toolName, args, userId) {
         };
       }
 
-      const home = await Home.findById(args.homeId);
-      if (!home) {
-        return { error: "Home not found. Cannot create booking." };
+      let targetHome = null;
+      if (args.homeId) {
+        try {
+          targetHome = await Home.findById(args.homeId);
+        } catch {
+          // not an ObjectId
+        }
+      }
+      if (!targetHome && (args.homeName || args.homeId)) {
+        const nameToSearch = args.homeName || args.homeId;
+        targetHome = await Home.findOne({ houseName: { $regex: nameToSearch, $options: "i" } });
+      }
+
+      if (!targetHome) {
+        return { error: "Could not find the property to book. Please specify the home name or ID." };
       }
 
       const booking = await Booking.create({
         user: userId,
-        home: args.homeId,
+        home: targetHome._id,
         status: "confirmed",
       });
 
       return {
         success: true,
         bookingId: booking._id.toString(),
-        homeName: home.houseName,
-        price: home.price,
+        homeName: targetHome.houseName,
+        location: targetHome.location,
+        price: targetHome.price,
+        dates: (args.checkIn && args.checkOut) ? `${args.checkIn} to ${args.checkOut}` : "Confirmed",
+        guests: args.guests || 1,
         status: "confirmed",
-        message: `Booking confirmed for ${home.houseName}!`,
+        message: `Booking successfully confirmed for ${targetHome.houseName}!`,
       };
+    }
+
+    case "getUserBookings": {
+      if (!userId) {
+        return {
+          error: "User must be logged in to view their bookings.",
+          requiresLogin: true,
+        };
+      }
+
+      const bookings = await Booking.find({ user: userId })
+        .populate("home")
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .lean();
+
+      if (!bookings || bookings.length === 0) {
+        return { count: 0, message: "You don't have any bookings yet." };
+      }
+
+      return {
+        count: bookings.length,
+        bookings: bookings.map((b) => ({
+          bookingId: b._id.toString(),
+          status: b.status,
+          bookedOn: b.createdAt ? new Date(b.createdAt).toLocaleDateString() : "Recently",
+          home: b.home
+            ? {
+                id: b.home._id.toString(),
+                name: b.home.houseName,
+                location: b.home.location,
+                price: b.home.price,
+              }
+            : { name: "Property details unavailable" },
+        })),
+      };
+    }
+
+    case "manageFavourites": {
+      if (!userId) {
+        return {
+          error: "User must be logged in to manage favourites.",
+          requiresLogin: true,
+        };
+      }
+
+      const User = require("../models/user");
+      const user = await User.findById(userId).populate("favourites");
+      if (!user) return { error: "User record not found." };
+
+      if (args.action === "list") {
+        const favs = user.favourites || [];
+        return {
+          count: favs.length,
+          favourites: favs.map((f) => ({
+            id: f._id.toString(),
+            name: f.houseName,
+            location: f.location,
+            price: f.price,
+            rating: f.rating,
+          })),
+        };
+      }
+
+      // Action: add or remove
+      let targetHome = null;
+      if (args.homeId) {
+        try { targetHome = await Home.findById(args.homeId); } catch {}
+      }
+      if (!targetHome && args.homeName) {
+        targetHome = await Home.findOne({ houseName: { $regex: args.homeName, $options: "i" } });
+      }
+      if (!targetHome) {
+        return { error: "Could not find the property to update favourites." };
+      }
+
+      const homeIdStr = targetHome._id.toString();
+
+      if (args.action === "add") {
+        if (!user.favourites.some((f) => f._id.toString() === homeIdStr)) {
+          user.favourites.push(targetHome._id);
+          await user.save();
+        }
+        return { success: true, message: `Added ${targetHome.houseName} to your favourites!` };
+      }
+
+      if (args.action === "remove") {
+        user.favourites = user.favourites.filter((f) => f._id.toString() !== homeIdStr);
+        await user.save();
+        return { success: true, message: `Removed ${targetHome.houseName} from your favourites.` };
+      }
+
+      return { error: "Invalid action." };
     }
 
     default:
@@ -186,23 +360,23 @@ async function executeTool(toolName, args, userId) {
 
 // ── Main Agent Function ─────────────────────────────────────────────────────
 async function processMessage(userMessage, userId = null, chatHistory = []) {
-  const systemPrompt = `You are HavenTo Assistant — a helpful accommodation booking assistant.
+  const systemPrompt = `You are HavenTo Assistant — an intelligent, friendly accommodation booking assistant for HavenTo.
 
-IMPORTANT: Always use the searchHomes tool when a user asks about homes, locations, or availability. Never guess — always search the database first.
-
-Your capabilities:
-- Search for homes/accommodations by location, price, and rating
-- Show detailed information about specific properties
-- Book properties for logged-in users
-
-Guidelines:
-- Be helpful and concise, no unnecessary filler
-- When showing homes, present them in a clean numbered list with name, price, location, and rating
-- Include the home ID so the user can refer to specific ones
-- If the user wants to book, confirm which property before booking
-- If the user asks something unrelated to accommodation/travel, politely redirect
-- Do not use excessive emojis
-- Prices are in INR (₹)`;
+IMPORTANT RULES:
+1. Always use searchHomes when a user asks for stays, recommendations, places to stay, or mentions a location, budget, or rating. Never make up fake homes.
+2. For specific properties, use getHomeDetails to fetch comprehensive details.
+3. For auto-booking (e.g., "Book that one for Dec 25-28" or "Book Saurabh's home"):
+   - Call createBooking with the homeId (or homeName) and dates.
+   - If user is not logged in, explain politely that they need to be logged in to complete a booking.
+4. If the user asks about their existing bookings or trips (e.g., "What are my bookings?"), call getUserBookings.
+5. If the user asks about favourites (e.g., "Show my saved homes" or "Add to favourites"), call manageFavourites.
+6. When showing homes, present them in a clean numbered list with:
+   - Name
+   - Location
+   - Price (₹/night)
+   - Rating
+   - ID (so the user can easily say "Book #1" or "Tell me more about [ID]")
+7. Keep responses concise, clean, and helpful. Do not use excessive emojis.`;
 
   const messages = [
     { role: "system", content: systemPrompt },

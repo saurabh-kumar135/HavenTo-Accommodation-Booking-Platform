@@ -8,7 +8,7 @@ const AIChatWidget = () => {
   const [messages, setMessages] = useState([
     {
       role: 'bot',
-      content: `Hi! I'm your HavenTo assistant. I can help you find and book the perfect stay.\n\nJust tell me what you're looking for — a location, budget, or anything else.`,
+      content: `Hi! I'm your HavenTo assistant.\n\nI can help you:\n- **Find stays** (by location, budget, or rating)\n- **Show property details**\n- **Auto-book** a home for your dates\n- **View your bookings & saved homes**\n\nHow can I help you today?`,
     },
   ]);
   const [input, setInput] = useState('');
@@ -20,9 +20,9 @@ const AIChatWidget = () => {
 
   const suggestions = [
     'Show all homes',
-    'Homes in Mumbai',
-    'Under ₹8,000/night',
-    'Top rated stays',
+    'Homes in Taharpur',
+    'What are my bookings?',
+    'Show my saved homes',
   ];
 
   useEffect(() => {
