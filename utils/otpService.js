@@ -1,8 +1,21 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// Create reusable transporter using Gmail SMTP
+// Create reusable transporter using Gmail OAuth2 (or fallback to app password)
 const getTransporter = () => {
+  if (process.env.GMAIL_REFRESH_TOKEN) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: process.env.EMAIL_USER || 'saurabhrajput.25072005@gmail.com',
+        clientId: process.env.GMAIL_CLIENT_ID,
+        clientSecret: process.env.GMAIL_CLIENT_SECRET,
+        refreshToken: process.env.GMAIL_REFRESH_TOKEN
+      }
+    });
+  }
+
   return nodemailer.createTransport({
     service: 'gmail',
     auth: {
