@@ -1,18 +1,29 @@
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// Initialize Resend with API key
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Create reusable transporter using Gmail SMTP
+const getTransporter = () => {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER || 'saurabhrajput.25072005@gmail.com',
+      pass: (process.env.EMAIL_PASS || 'sheleprpeihikkwl').replace(/\s+/g, '')
+    }
+  });
+};
 
 const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
 const sendOTPEmail = async (email, otp, firstName) => {
+  const senderEmail = process.env.EMAIL_USER || 'saurabhrajput.25072005@gmail.com';
+  const transporter = getTransporter();
+
   const mailOptions = {
-    from: 'HavenTo <onboarding@resend.dev>', // Resend's test email for free tier
+    from: `"HavenTo" <${senderEmail}>`,
     to: email,
-    subject: 'Complete your HavenTo registration',
+    subject: 'Complete your HavenTo registration - Verification Code',
     html: `
       <!DOCTYPE html>
       <html lang="en">
@@ -21,24 +32,26 @@ const sendOTPEmail = async (email, otp, firstName) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Verify Your Email</title>
       </head>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; padding: 30px; border-radius: 10px;">
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; margin: -30px -30px 30px -30px;">
-            <h1 style="margin: 0; font-size: 24px;">Welcome to HavenTo!</h1>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1a202c; margin: 0; padding: 20px; background-color: #f7fafc;">
+        <div style="max-width: 540px; margin: 0 auto; background: #ffffff; padding: 32px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border: 1px solid #e2e8f0;">
+          <div style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; padding: 28px; text-align: center; border-radius: 12px; margin-bottom: 24px;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">Welcome to HavenTo! 🏡</h1>
           </div>
           
-          <p>Hi ${firstName || 'there'},</p>
-          <p>Thank you for signing up with HavenTo! Please use the verification code below to complete your registration:</p>
+          <p style="font-size: 16px;">Hi <strong>${firstName || 'there'}</strong>,</p>
+          <p style="font-size: 15px; color: #4a5568;">Thank you for joining HavenTo! Please use the 6-digit verification code below to complete your registration:</p>
           
-          <div style="text-align: center; margin: 30px 0; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <div style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #667eea; font-family: 'Courier New', monospace;">${otp}</div>
+          <div style="text-align: center; margin: 28px 0; padding: 20px; background: #f8fafc; border-radius: 12px; border: 2px dashed #cbd5e1;">
+            <div style="font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #4f46e5; font-family: 'Courier New', Courier, monospace;">${otp}</div>
+            <p style="margin: 8px 0 0 0; font-size: 13px; color: #64748b;">Valid for 10 minutes</p>
           </div>
           
-          <p><strong>This code will expire in 10 minutes.</strong></p>
-          <p>If you didn't create an account with HavenTo, you can safely ignore this email.</p>
+          <p style="font-size: 14px; color: #718096;">If you didn't create an account with HavenTo, you can safely ignore this email.</p>
           
-          <div style="text-align: center; margin-top: 30px; color: #666; font-size: 12px;">
-            <p>© 2024 HavenTo. All rights reserved.</p>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+          
+          <div style="text-align: center; color: #94a3b8; font-size: 12px;">
+            <p style="margin: 0;">© ${new Date().getFullYear()} HavenTo Inc. All rights reserved.</p>
           </div>
         </div>
       </body>
@@ -47,9 +60,9 @@ const sendOTPEmail = async (email, otp, firstName) => {
   };
 
   try {
-    const data = await resend.emails.send(mailOptions);
-    console.log(`✅ OTP email sent successfully to ${email}`, data);
-    return { success: true };
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ OTP email sent successfully to ${email} (MessageId: ${info.messageId})`);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('❌ Error sending OTP email:', error.message);
     return { success: false, error: error.message };
@@ -57,10 +70,13 @@ const sendOTPEmail = async (email, otp, firstName) => {
 };
 
 const sendPasswordResetEmail = async (email, resetToken, firstName) => {
-  const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+  const senderEmail = process.env.EMAIL_USER || 'saurabhrajput.25072005@gmail.com';
+  const frontendUrl = process.env.FRONTEND_URL || 'https://havento.vercel.app';
+  const resetLink = `${frontendUrl}/reset-password/${resetToken}`;
+  const transporter = getTransporter();
   
   const mailOptions = {
-    from: 'HavenTo <onboarding@resend.dev>', // Resend's test email for free tier
+    from: `"HavenTo" <${senderEmail}>`,
     to: email,
     subject: 'Reset your HavenTo password',
     html: `
@@ -71,35 +87,31 @@ const sendPasswordResetEmail = async (email, resetToken, firstName) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Reset Your Password</title>
       </head>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; padding: 30px; border-radius: 10px;">
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; margin: -30px -30px 30px -30px;">
-            <h1 style="margin: 0; font-size: 24px;">Password Reset</h1>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1a202c; margin: 0; padding: 20px; background-color: #f7fafc;">
+        <div style="max-width: 540px; margin: 0 auto; background: #ffffff; padding: 32px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border: 1px solid #e2e8f0;">
+          <div style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; padding: 28px; text-align: center; border-radius: 12px; margin-bottom: 24px;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Password Reset 🔑</h1>
           </div>
           
-          <p>Hi ${firstName || 'there'},</p>
-          <p>We received a request to reset your password for your HavenTo account.</p>
+          <p style="font-size: 16px;">Hi <strong>${firstName || 'there'}</strong>,</p>
+          <p style="font-size: 15px; color: #4a5568;">We received a request to reset your password for your HavenTo account.</p>
           
-          <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
-            <p style="margin: 0; color: #856404;"><strong>🔒 Security Notice:</strong> This is a legitimate password reset email from HavenTo.</p>
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="${resetLink}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);">Reset My Password</a>
           </div>
           
-          <p>Click the button below to create a new password:</p>
-          
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetLink}" style="display: inline-block; padding: 15px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; font-weight: 600;">Reset My Password</a>
+          <p style="font-size: 13px; color: #64748b; margin-top: 20px;">Or copy and paste this link into your browser:</p>
+          <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; word-break: break-all; font-size: 12px; color: #475569;">
+            <a href="${resetLink}" style="color: #4f46e5; text-decoration: none;">${resetLink}</a>
           </div>
           
-          <p style="margin-top: 25px;">Or copy this secure link:</p>
-          <div style="background: white; padding: 15px; border-radius: 5px; word-break: break-all; margin: 15px 0;">
-            <a href="${resetLink}" style="color: #667eea; text-decoration: none;">${resetLink}</a>
-          </div>
+          <p style="font-size: 13px; color: #e11d48; margin-top: 20px;"><strong>⏰ This link expires in 1 hour.</strong></p>
+          <p style="font-size: 13px; color: #94a3b8;">If you didn't request this reset, you can safely ignore this email.</p>
           
-          <p><strong>⏰ This link expires in 1 hour</strong> for your security.</p>
-          <p>If you didn't request this password reset, you can safely ignore this email. Your password will not be changed.</p>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
           
-          <div style="text-align: center; margin-top: 30px; color: #666; font-size: 12px;">
-            <p>© 2024 HavenTo. All rights reserved.</p>
+          <div style="text-align: center; color: #94a3b8; font-size: 12px;">
+            <p style="margin: 0;">© ${new Date().getFullYear()} HavenTo Inc. All rights reserved.</p>
           </div>
         </div>
       </body>
@@ -108,9 +120,9 @@ const sendPasswordResetEmail = async (email, resetToken, firstName) => {
   };
 
   try {
-    const data = await resend.emails.send(mailOptions);
-    console.log(`✅ Password reset email sent successfully to ${email}`, data);
-    return { success: true };
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ Password reset email sent successfully to ${email} (MessageId: ${info.messageId})`);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('❌ Error sending password reset email:', error.message);
     return { success: false, error: error.message };
