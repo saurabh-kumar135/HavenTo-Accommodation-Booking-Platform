@@ -16,16 +16,22 @@ import numpy as np
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
+from pathlib import Path
 from schemas import MemoryItem, RAGContextResponse
 
+# Load .env from rag_service or parent directory (HavenTo root)
+_parent_env = Path(__file__).resolve().parent.parent / ".env"
+if _parent_env.exists():
+    load_dotenv(_parent_env)
 load_dotenv()
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-MONGO_URI = os.getenv(
-    "MONGO_URI",
-    "mongodb+srv://sk314983:kO4F087dGf2Z6R6p@cluster0.aem24.mongodb.net/airbnb?retryWrites=true&w=majority&appName=Cluster0",
+MONGO_URI = (
+    os.getenv("MONGODB_URI")
+    or os.getenv("MONGO_URI")
+    or "mongodb+srv://CRUDABC:MAKEFILE12345@cluster1.vzxjvpm.mongodb.net/HavenTo?retryWrites=true&w=majority&appName=cluster1"
 )
-DB_NAME = "airbnb"
+DB_NAME = "HavenTo"
 COLL_NAME = "user_memories"
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_TOP_K = 3
