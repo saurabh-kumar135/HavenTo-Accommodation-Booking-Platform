@@ -51,6 +51,8 @@ def get_collection():
         _client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
         _collection = _client[DB_NAME][COLL_NAME]
         _collection.create_index([("user_id", 1), ("timestamp", -1)])
+        # Automatic 30-day TTL index: keeps MongoDB Atlas storage lightweight and maintenance-free
+        _collection.create_index("timestamp", expireAfterSeconds=30 * 24 * 60 * 60)
     return _collection
 
 
