@@ -30,6 +30,12 @@
       flex-direction: column;
       overflow: hidden;
       box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+      transition: max-width 0.3s ease, height 0.3s ease;
+    }
+
+    .chat-container.expanded {
+      max-width: 920px;
+      height: 94vh;
     }
 
     .chat-header {
@@ -63,8 +69,34 @@
       margin-top: 2px;
     }
 
-    .chat-header .status {
+    .header-actions {
       margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-btn {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+
+    .header-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.05);
+    }
+
+    .chat-header .status {
       width: 10px;
       height: 10px;
       background: #4ade80;
@@ -221,14 +253,17 @@
   </style>
 </head>
 <body>
-  <div class="chat-container">
+  <div class="chat-container" id="chatContainer">
     <div class="chat-header">
       <div class="avatar">🏡</div>
       <div class="info">
         <h2>HavenTo AI</h2>
         <p>Smart Accommodation Assistant</p>
       </div>
-      <div class="status"></div>
+      <div class="header-actions">
+        <button class="header-btn" id="expandToggleBtn" onclick="toggleExpand()" title="Maximize / Restore window">⤢</button>
+        <div class="status"></div>
+      </div>
     </div>
 
     <div class="chat-messages" id="messages">
@@ -266,6 +301,15 @@
     const input = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
     const suggestionsDiv = document.getElementById('suggestions');
+    const chatContainer = document.getElementById('chatContainer');
+    const expandToggleBtn = document.getElementById('expandToggleBtn');
+
+    function toggleExpand() {
+      chatContainer.classList.toggle('expanded');
+      const isExpanded = chatContainer.classList.contains('expanded');
+      expandToggleBtn.innerHTML = isExpanded ? '⤡' : '⤢';
+      expandToggleBtn.title = isExpanded ? 'Restore normal size' : 'Maximize window';
+    }
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
