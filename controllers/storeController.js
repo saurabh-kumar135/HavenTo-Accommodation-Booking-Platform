@@ -77,7 +77,28 @@ exports.postBooking = async (req, res, next) => {
 
     let calculatedTotalPrice = home.price;
     if (checkIn && checkOut) {
-      const diffTime = Math.abs(new Date(checkOut) - new Date(checkIn));
+      const checkInDate = new Date(checkIn);
+      const checkOutDate = new Date(checkOut);
+      if (checkOutDate <= checkInDate) {
+        return res.status(422).json({ success: false, message: "Check-out date must be after check-in date" });
+      }
+
+      // Check if property is already booked for these dates (only active confirmed bookings)
+      const conflictingBooking = await Booking.findOne({
+        home: homeId,
+        status: 'confirmed',
+        checkIn: { $lt: checkOutDate },
+        checkOut: { $gt: checkInDate },
+      });
+
+      if (conflictingBooking) {
+        return res.status(409).json({
+          success: false,
+          message: "This property is already booked for the selected dates. Please choose different dates.",
+        });
+      }
+
+      const diffTime = Math.abs(checkOutDate - checkInDate);
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
       calculatedTotalPrice = diffDays * home.price;
     }
@@ -127,6 +148,123 @@ exports.postBooking = async (req, res, next) => {
     });
   } catch (err) {
     res.status(500).json({ success: false, message: "Could not create booking", error: err.message });
+  }
+};
+
+exports.cancelBooking = async (req, res, next) => {
+  const user = await resolveUser(req);
+  if (!user) {
+    return res.status(401).json({ success: false, message: "Please login to cancel a booking" });
+  }
+
+  const { bookingId } = req.params;
+  const { reason, reasonDetails } = req.body;
+
+  try {
+    const booking = await Booking.findOne({ _id: bookingId, user: user._id }).populate('home');
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found or you do not have permission to cancel it." });
+    }
+
+    if (booking.status === 'cancelled') {
+      return res.status(400).json({ success: false, message: "This booking has already been cancelled." });
+    }
+
+    // 1. Mandatory Solid Reason validation
+    const validReasons = [
+      "Change of travel plans",
+      "Found alternative accommodation",
+      "Medical or personal emergency",
+      "Accidental / duplicate booking",
+      "Host requested cancellation",
+      "Other solid reason",
+    ];
+
+    if (!reason || !validReasons.includes(reason)) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid reason category is required to cancel your reservation.",
+      });
+    }
+
+    const trimmedDetails = (reasonDetails || "").trim();
+    if (!trimmedDetails || trimmedDetails.length < 15) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a solid reason and detailed explanation (minimum 15 characters). Otherwise, booking cannot be cancelled.",
+      });
+    }
+
+    // 2. Strict Time Limit Policy:
+    // Cancellations permitted only up to 24 hours prior to check-in date (or within 24 hours of booking if no check-in date)
+    const now = new Date();
+    const CANCELLATION_WINDOW_HOURS = 24;
+
+    if (booking.checkIn) {
+      const checkInTime = new Date(booking.checkIn).getTime();
+      const cutoffTime = checkInTime - (CANCELLATION_WINDOW_HOURS * 60 * 60 * 1000);
+      
+      if (now.getTime() > cutoffTime) {
+        return res.status(400).json({
+          success: false,
+          message: "Cancellation deadline has passed. In accordance with HavenTo policy, reservations cannot be cancelled within 24 hours of the check-in date or once the stay has commenced.",
+        });
+      }
+    } else if (booking.createdAt) {
+      const createdTime = new Date(booking.createdAt).getTime();
+      const cutoffTime = createdTime + (CANCELLATION_WINDOW_HOURS * 60 * 60 * 1000);
+      if (now.getTime() > cutoffTime) {
+        return res.status(400).json({
+          success: false,
+          message: "Cancellation window closed. Bookings without explicit dates can only be cancelled within 24 hours of creation.",
+        });
+      }
+    }
+
+    // Perform cancellation
+    booking.status = 'cancelled';
+    booking.cancellationReason = reason;
+    booking.cancellationDetails = trimmedDetails;
+    booking.cancelledAt = now;
+    await booking.save();
+
+    // Push notifications (best effort)
+    (async () => {
+      try {
+        const [freshGuest, host] = await Promise.all([
+          User.findById(user._id),
+          booking.home?.hostId ? User.findById(booking.home.hostId) : null,
+        ]);
+
+        if (freshGuest?.pushToken) {
+          await sendPushNotification(
+            freshGuest.pushToken,
+            "Booking Cancelled",
+            `Your booking for ${booking.home?.houseName || 'the property'} has been cancelled.`,
+            { bookingId: booking._id.toString() }
+          );
+        }
+
+        if (host?.pushToken) {
+          await sendPushNotification(
+            host.pushToken,
+            "Booking Cancelled by Guest",
+            `${freshGuest?.firstName || 'A guest'} cancelled their booking for ${booking.home?.houseName || 'your property'}. Reason: ${reason}.`,
+            { bookingId: booking._id.toString() }
+          );
+        }
+      } catch (pushErr) {
+        console.error("Push notification error during cancellation (non-fatal):", pushErr);
+      }
+    })();
+
+    res.json({
+      success: true,
+      message: "Booking cancelled successfully. The dates have been released for other guests.",
+      booking,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Could not cancel booking", error: err.message });
   }
 };
 

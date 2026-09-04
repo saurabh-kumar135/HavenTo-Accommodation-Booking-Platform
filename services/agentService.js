@@ -134,6 +134,44 @@ const tools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "cancelBooking",
+      description:
+        "Cancel an existing confirmed booking. Under HavenTo platform policy, cancellations are only permitted up to 24 hours prior to check-in, and the user must provide a valid reason category and detailed explanation (minimum 15 characters).",
+      parameters: {
+        type: "object",
+        properties: {
+          bookingId: {
+            type: "string",
+            description: "The MongoDB ObjectId of the booking to cancel",
+          },
+          homeName: {
+            type: "string",
+            description: "The name of the booked home (if bookingId is not known)",
+          },
+          reason: {
+            type: "string",
+            enum: [
+              "Change of travel plans",
+              "Found alternative accommodation",
+              "Medical or personal emergency",
+              "Accidental / duplicate booking",
+              "Host requested cancellation",
+              "Other solid reason",
+            ],
+            description: "The category/reason for cancellation",
+          },
+          reasonDetails: {
+            type: "string",
+            description: "A solid, detailed explanation of why the user wants to cancel (minimum 15 characters)",
+          },
+        },
+        required: ["reason", "reasonDetails"],
+      },
+    },
+  },
 ];
 
 // ── Tool Execution (actually queries MongoDB) ───────────────────────────────
@@ -293,6 +331,88 @@ async function executeTool(toolName, args, userId) {
               }
             : { name: "Property details unavailable" },
         })),
+      };
+    }
+
+    case "cancelBooking": {
+      if (!userId) {
+        return {
+          error: "User must be logged in to cancel a booking.",
+          requiresLogin: true,
+        };
+      }
+
+      const { bookingId, homeName, reason, reasonDetails } = args;
+
+      if (!reason || !reasonDetails || reasonDetails.trim().length < 15) {
+        return {
+          error: "HavenTo Cancellation Policy requires a valid reason category and a detailed explanation of at least 15 characters to cancel any reservation.",
+          policyNotice: "Cancellations are only allowed at least 24 hours prior to check-in with a solid written reason.",
+        };
+      }
+
+      let booking;
+      if (bookingId) {
+        booking = await Booking.findOne({ _id: bookingId, user: userId }).populate("home");
+      } else if (homeName) {
+        const homes = await Home.find({
+          houseName: { $regex: new RegExp(homeName, "i") },
+        });
+        const homeIds = homes.map((h) => h._id);
+        booking = await Booking.findOne({
+          home: { $in: homeIds },
+          user: userId,
+          status: "confirmed",
+        }).populate("home");
+      } else {
+        // Find most recent confirmed booking
+        booking = await Booking.findOne({ user: userId, status: "confirmed" })
+          .sort({ createdAt: -1 })
+          .populate("home");
+      }
+
+      if (!booking) {
+        return {
+          error: "No active confirmed booking found matching your request.",
+        };
+      }
+
+      if (booking.status === "cancelled") {
+        return { error: "This booking has already been cancelled." };
+      }
+
+      // Check 24 hour policy
+      const now = new Date();
+      if (booking.checkIn) {
+        const checkInTime = new Date(booking.checkIn).getTime();
+        const cutoffTime = checkInTime - 24 * 60 * 60 * 1000;
+        if (now.getTime() > cutoffTime) {
+          return {
+            error: "Cancellation deadline has passed. Reservations cannot be cancelled within 24 hours of check-in.",
+            policyNotice: "Non-refundable window has begun.",
+          };
+        }
+      } else if (booking.createdAt) {
+        const createdTime = new Date(booking.createdAt).getTime();
+        if (now.getTime() > createdTime + 24 * 60 * 60 * 1000) {
+          return {
+            error: "Cancellation window closed. Bookings can only be cancelled within 24 hours of creation.",
+          };
+        }
+      }
+
+      booking.status = "cancelled";
+      booking.cancellationReason = reason;
+      booking.cancellationDetails = reasonDetails.trim();
+      booking.cancelledAt = now;
+      await booking.save();
+
+      return {
+        success: true,
+        message: `Booking for ${booking.home?.houseName || "the home"} has been cancelled successfully. The reserved dates have been freed for other guests.`,
+        homeName: booking.home?.houseName,
+        cancellationReason: reason,
+        cancelledAt: now.toISOString(),
       };
     }
 

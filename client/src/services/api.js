@@ -31,6 +31,8 @@ export const createBooking = (data) => {
   const payload = typeof data === 'string' ? { homeId: data } : data;
   return api.post('/api/bookings', payload);
 };
+export const cancelBooking = (bookingId, cancellationData) =>
+  api.post(`/api/bookings/cancel/${bookingId}`, cancellationData);
 export const getFavourites = () => api.get('/api/favourites');
 export const addToFavourite = (homeId) => api.post('/api/favourites', { id: homeId });
 export const removeFromFavourite = (homeId) => api.post(`/api/favourites/delete/${homeId}`);

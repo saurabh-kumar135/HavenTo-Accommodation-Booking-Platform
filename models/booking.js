@@ -29,6 +29,15 @@ const bookingSchema = mongoose.Schema({
   totalPrice: {
     type: Number,
   },
+  cancellationReason: {
+    type: String,
+  },
+  cancellationDetails: {
+    type: String,
+  },
+  cancelledAt: {
+    type: Date,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
