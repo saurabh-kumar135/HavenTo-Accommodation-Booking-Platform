@@ -478,6 +478,49 @@ async function executeTool(toolName, args, userId) {
   }
 }
 
+// ── Python RAG Memory Bridge (Pydantic + SentenceTransformers) ───────────────
+const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || "http://127.0.0.1:8000";
+
+async function getRAGMemoryContext(userId, query) {
+  if (!userId || !query) return "";
+  try {
+    const res = await fetch(`${RAG_SERVICE_URL}/memory/context`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId.toString(),
+        query: query,
+        top_k: 3,
+      }),
+      signal: AbortSignal.timeout(2000), // 2s timeout safeguard
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.has_memory && data.context_string) {
+        console.log(`🧠 Injected RAG memory for user ${userId} (${data.memories?.length || 0} memories found)`);
+        return data.context_string;
+      }
+    }
+  } catch (err) {
+    // Non-fatal: if RAG service is temporarily offline, conversation continues smoothly
+  }
+  return "";
+}
+
+function saveRAGMemoryAsync(userId, userMessage, agentResponse) {
+  if (!userId || !userMessage || !agentResponse) return;
+  fetch(`${RAG_SERVICE_URL}/memory/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId.toString(),
+      user_message: userMessage,
+      agent_response: agentResponse,
+    }),
+    signal: AbortSignal.timeout(4000),
+  }).catch(() => {});
+}
+
 // ── Main Agent Function ─────────────────────────────────────────────────────
 async function processMessage(userMessage, userId = null, chatHistory = []) {
   const systemPrompt = `You are HavenTo Assistant — an intelligent, friendly accommodation booking assistant for HavenTo.
@@ -489,17 +532,30 @@ IMPORTANT RULES:
    - Call createBooking with the homeId (or homeName) and dates.
    - If user is not logged in, explain politely that they need to be logged in to complete a booking.
 4. If the user asks about their existing bookings or trips (e.g., "What are my bookings?"), call getUserBookings.
-5. If the user asks about favourites (e.g., "Show my saved homes" or "Add to favourites"), call manageFavourites.
-6. When showing homes, present them in a clean numbered list with:
+5. If the user asks to cancel a booking (e.g., "Cancel my booking for Saurabh's home"), call cancelBooking. Remember: cancellation requires a solid reason & detailed explanation (>= 15 chars) and check-in must be at least 24 hours away.
+6. If the user asks about favourites (e.g., "Show my saved homes" or "Add to favourites"), call manageFavourites.
+7. If previous memory context is provided, use it seamlessly to remember past questions, destinations discussed, or user preferences.
+8. When showing homes, present them in a clean numbered list with:
    - Name
    - Location
    - Price (₹/night)
    - Rating
    - ID (so the user can easily say "Book #1" or "Tell me more about [ID]")
-7. Keep responses concise, clean, and helpful. Do not use excessive emojis.`;
+9. Keep responses concise, clean, and helpful. Do not use excessive emojis.`;
+
+  // 1. Fetch RAG memory context from Python service if user is logged in
+  let memoryContext = "";
+  if (userId) {
+    memoryContext = await getRAGMemoryContext(userId, userMessage);
+  }
+
+  let effectiveSystemPrompt = systemPrompt;
+  if (memoryContext) {
+    effectiveSystemPrompt += `\n\n${memoryContext}`;
+  }
 
   const messages = [
-    { role: "system", content: systemPrompt },
+    { role: "system", content: effectiveSystemPrompt },
     ...chatHistory,
     { role: "user", content: userMessage },
   ];
@@ -559,8 +615,15 @@ IMPORTANT RULES:
     assistantMessage = response.choices[0].message;
   }
 
+  const reply = assistantMessage.content || "I couldn't generate a response. Please try again.";
+
+  // 2. Persist exchange asynchronously to Python RAG memory for future context
+  if (userId) {
+    saveRAGMemoryAsync(userId, userMessage, reply);
+  }
+
   return {
-    reply: assistantMessage.content || "I couldn't generate a response. Please try again.",
+    reply,
     usage: response.usage,
   };
 }
