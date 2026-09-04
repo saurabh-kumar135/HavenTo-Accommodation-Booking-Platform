@@ -180,10 +180,11 @@ async function executeTool(toolName, args, userId) {
     case "searchHomes": {
       const query = {};
       if (args.location) {
+        const cleanLoc = args.location.replace(/[.,!?;:]+$/, '').trim();
         // Search in both location and houseName fields
         query.$or = [
-          { location: { $regex: args.location, $options: "i" } },
-          { houseName: { $regex: args.location, $options: "i" } },
+          { location: { $regex: cleanLoc, $options: "i" } },
+          { houseName: { $regex: cleanLoc, $options: "i" } },
         ];
       }
       if (args.maxPrice) {
@@ -604,7 +605,8 @@ OPERATIONAL RULES:
    - Price (₹/night)
    - Rating
    - ID (so the user can easily say "Book #1" or "Tell me more about [ID]")
-9. Keep responses concise, clean, and helpful. Do not use excessive emojis.`;
+9. Keep responses concise, clean, and helpful. Do not use excessive emojis.
+10. STRICT TRUTHFULNESS & ZERO HALLUCINATION (CRITICAL): You must ONLY mention and describe homes that were explicitly returned from the searchHomes, getHomeDetails, or createBooking tools. If only 1 home exists in a location (such as "Saurabh's home" in Taharpur), you must state clearly that there is only 1 home. NEVER invent, fabricate, or make up names of fake hotels or estates.`;
 
   // 1. Fetch RAG memory context from Python service if user is logged in
   let memoryContext = "";
