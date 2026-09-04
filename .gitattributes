@@ -1,0 +1,3 @@
+# Ignore legacy EJS templates from GitHub language breakdown
+views/** linguist-detectable=false
+views/** linguist-vendored=true
