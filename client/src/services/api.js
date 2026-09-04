@@ -33,6 +33,8 @@ export const createBooking = (data) => {
 };
 export const cancelBooking = (bookingId, cancellationData) =>
   api.post(`/api/bookings/cancel/${bookingId}`, cancellationData);
+export const deleteBooking = (bookingId) =>
+  api.delete(`/api/bookings/${bookingId}`);
 export const getFavourites = () => api.get('/api/favourites');
 export const addToFavourite = (homeId) => api.post('/api/favourites', { id: homeId });
 export const removeFromFavourite = (homeId) => api.post(`/api/favourites/delete/${homeId}`);

@@ -268,6 +268,31 @@ exports.cancelBooking = async (req, res, next) => {
   }
 };
 
+exports.deleteBooking = async (req, res, next) => {
+  const user = await resolveUser(req);
+  if (!user) {
+    return res.status(401).json({ success: false, message: "Please login to manage bookings" });
+  }
+
+  const { bookingId } = req.params;
+
+  try {
+    const booking = await Booking.findOne({ _id: bookingId, user: user._id });
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    await Booking.findByIdAndDelete(bookingId);
+
+    res.json({
+      success: true,
+      message: "Booking removed completely from your list.",
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Could not remove booking", error: err.message });
+  }
+};
+
 exports.getFavouriteList = async (req, res, next) => {
   try {
     const authedUser = await resolveUser(req);

@@ -9,6 +9,8 @@ storeRouter.get("/api/homes", storeController.getHomes);
 storeRouter.get("/api/bookings", storeController.getBookings);
 storeRouter.post("/api/bookings", storeController.postBooking);
 storeRouter.post("/api/bookings/cancel/:bookingId", storeController.cancelBooking);
+storeRouter.delete("/api/bookings/:bookingId", storeController.deleteBooking);
+storeRouter.post("/api/bookings/delete/:bookingId", storeController.deleteBooking);
 storeRouter.get("/api/favourites", storeController.getFavouriteList);
 
 storeRouter.get("/api/homes/:homeId", storeController.getHomeDetails);
