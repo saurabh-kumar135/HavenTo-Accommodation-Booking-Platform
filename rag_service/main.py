@@ -18,7 +18,7 @@ from schemas import (
 from memory import (
     save_conversation,
     build_memory_context,
-    get_model,
+    get_embedder,
     get_collection,
 )
 
@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     # Pre-warm model on startup
     print("🚀 Starting HavenTo RAG Memory Service...")
     try:
-        get_model()
+        get_embedder()
         print("✅ Embedding model pre-warmed and ready.")
     except Exception as e:
         print(f"⚠️ Model pre-warm failed: {e}")
