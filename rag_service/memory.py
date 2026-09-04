@@ -4,6 +4,7 @@ memory.py — RAG Memory Engine for HavenTo
 Stores user conversations with 384-dimensional vector embeddings in MongoDB.
 Retrieves the most semantically relevant memories or recent interactions
 and formats them for injection into the Groq LLM context.
+Uses FastEmbed (ONNX) or SentenceTransformer for 384-dim all-MiniLM-L6-v2 embeddings.
 """
 
 import os
@@ -14,7 +15,6 @@ from typing import List, Tuple, Optional
 import numpy as np
 from dotenv import load_dotenv
 from pymongo import MongoClient
-from sentence_transformers import SentenceTransformer
 
 from schemas import MemoryItem, RAGContextResponse
 
@@ -27,14 +27,15 @@ MONGO_URI = os.getenv(
 )
 DB_NAME = "airbnb"
 COLL_NAME = "user_memories"
-MODEL_NAME = "all-MiniLM-L6-v2"
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_TOP_K = 3
 MIN_SIMILARITY = 0.32
 
 # ── Lazy Globals ──────────────────────────────────────────────────────────────
 _client = None
 _collection = None
-_model = None
+_embedder = None
+_embedder_type = None
 
 
 def get_collection():
@@ -47,21 +48,38 @@ def get_collection():
     return _collection
 
 
-def get_model() -> SentenceTransformer:
-    """Load embedding model (cached in memory after first load)."""
-    global _model
-    if _model is None:
-        print("🧠 Loading SentenceTransformer model ('all-MiniLM-L6-v2')...")
-        _model = SentenceTransformer(MODEL_NAME)
-        print("✅ SentenceTransformer model loaded successfully.")
-    return _model
+def get_embedder():
+    """Load embedding model (tries FastEmbed first for speed and low RAM, then sentence_transformers)."""
+    global _embedder, _embedder_type
+    if _embedder is None:
+        try:
+            from fastembed import TextEmbedding
+            print(f"🧠 Loading FastEmbed model ('{MODEL_NAME}')...")
+            _embedder = TextEmbedding(model_name=MODEL_NAME)
+            _embedder_type = "fastembed"
+            print("✅ FastEmbed model ready.")
+        except Exception as fe_err:
+            print(f"FastEmbed not used ({fe_err}), falling back to SentenceTransformer...")
+            from sentence_transformers import SentenceTransformer
+            _embedder = SentenceTransformer("all-MiniLM-L6-v2")
+            _embedder_type = "sentence_transformers"
+            print("✅ SentenceTransformer ready.")
+    return _embedder
 
 
 def embed_text(text: str) -> List[float]:
     """Convert text into a 384-dimensional normalized float vector."""
-    model = get_model()
-    embedding = model.encode(text, normalize_embeddings=True)
-    return embedding.tolist()
+    get_embedder()
+    if _embedder_type == "fastembed":
+        embeddings = list(_embedder.embed([text]))
+        vec = embeddings[0]
+        norm = np.linalg.norm(vec)
+        if norm > 0:
+            vec = vec / norm
+        return vec.tolist()
+    else:
+        embedding = _embedder.encode(text, normalize_embeddings=True)
+        return embedding.tolist()
 
 
 def cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
