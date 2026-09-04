@@ -270,20 +270,65 @@ async function executeTool(toolName, args, userId) {
           // not an ObjectId
         }
       }
-      if (!targetHome && (args.homeName || args.homeId)) {
-        const nameToSearch = args.homeName || args.homeId;
-        targetHome = await Home.findOne({ houseName: { $regex: nameToSearch, $options: "i" } });
+
+      const queryTerm = args.homeName || args.location || args.homeId;
+      if (!targetHome && queryTerm) {
+        // 1. Try matching houseName
+        targetHome = await Home.findOne({ houseName: { $regex: queryTerm, $options: "i" } });
+
+        // 2. If not found by houseName, search by location
+        if (!targetHome) {
+          const locHomes = await Home.find({ location: { $regex: queryTerm, $options: "i" } }).sort({ rating: -1 });
+          if (locHomes.length === 1) {
+            targetHome = locHomes[0];
+          } else if (locHomes.length > 1) {
+            return {
+              status: "multiple_options",
+              message: `I found ${locHomes.length} stays in ${queryTerm}. Which one would you like me to book?`,
+              options: locHomes.map((h, i) => ({
+                number: i + 1,
+                id: h._id.toString(),
+                name: h.houseName,
+                price: `₹${h.price}/night`,
+                rating: h.rating,
+              })),
+            };
+          }
+        }
       }
 
       if (!targetHome) {
-        return { error: "Could not find the property to book. Please specify the home name or ID." };
+        return { error: "Could not find the property to book. Please specify the home name or ID from the list." };
+      }
+
+      let calculatedTotalPrice = targetHome.price;
+      let checkInDate = undefined;
+      let checkOutDate = undefined;
+
+      if (args.checkIn && args.checkOut) {
+        const parsedIn = new Date(args.checkIn);
+        const parsedOut = new Date(args.checkOut);
+        if (!isNaN(parsedIn.getTime()) && !isNaN(parsedOut.getTime()) && parsedOut > parsedIn) {
+          checkInDate = parsedIn;
+          checkOutDate = parsedOut;
+          const diffDays = Math.ceil((parsedOut - parsedIn) / (1000 * 60 * 60 * 24)) || 1;
+          calculatedTotalPrice = diffDays * targetHome.price;
+        }
       }
 
       const booking = await Booking.create({
         user: userId,
         home: targetHome._id,
         status: "confirmed",
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+        guests: Number(args.guests) || 1,
+        totalPrice: calculatedTotalPrice,
       });
+
+      const dateString = (checkInDate && checkOutDate)
+        ? `${checkInDate.toLocaleDateString()} to ${checkOutDate.toLocaleDateString()}`
+        : "Confirmed (dates flexible)";
 
       return {
         success: true,
@@ -291,10 +336,11 @@ async function executeTool(toolName, args, userId) {
         homeName: targetHome.houseName,
         location: targetHome.location,
         price: targetHome.price,
-        dates: (args.checkIn && args.checkOut) ? `${args.checkIn} to ${args.checkOut}` : "Confirmed",
-        guests: args.guests || 1,
+        totalPrice: calculatedTotalPrice,
+        dates: dateString,
+        guests: Number(args.guests) || 1,
         status: "confirmed",
-        message: `Booking successfully confirmed for ${targetHome.houseName}!`,
+        message: `Booking successfully confirmed for ${targetHome.houseName} in ${targetHome.location}!`,
       };
     }
 
@@ -540,8 +586,13 @@ STRICT DOMAIN GUARDRAIL & SCOPE RESTRICTION (CRITICAL):
 OPERATIONAL RULES:
 1. Always use searchHomes when a user asks for stays, recommendations, places to stay, or mentions a location, budget, or rating. Never make up fake homes.
 2. For specific properties, use getHomeDetails to fetch comprehensive details.
-3. For auto-booking (e.g., "Book that one for Dec 25-28" or "Book Saurabh's home"):
-   - Call createBooking with the homeId (or homeName) and dates.
+3. FOR BOOKING REQUESTS (e.g., "Book the home in Taharpur", "Book Sunny House", "Book #1", "Book that stay"):
+   - Acknowledge that the user's explicit intent is to BOOK/RESERVE a home.
+   - If the user specifies a specific home name, ID, or option number (e.g. "Book #1" or "Book Sunny House"): call createBooking immediately.
+   - If the user says "Book the home in [location]" and multiple stays exist in that location:
+     - Show the numbered list of available stays in that location.
+     - PROMPT THEM CLEARLY: "I found multiple stays in [location]! Which one would you like me to book? (You can reply with 'Book #1' or the home name). Also let me know your desired check-in and check-out dates and number of guests so I can reserve it for you!"
+     - NEVER just display the search list without explicitly asking them which one to reserve and for what dates.
    - If user is not logged in, explain politely that they need to be logged in to complete a booking.
 4. If the user asks about their existing bookings or trips (e.g., "What are my bookings?"), call getUserBookings.
 5. If the user asks to cancel a booking (e.g., "Cancel my booking for Saurabh's home"), call cancelBooking. Remember: cancellation requires a solid reason & detailed explanation (>= 15 chars) and check-in must be at least 24 hours away.
