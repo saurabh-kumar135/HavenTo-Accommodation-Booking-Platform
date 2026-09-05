@@ -17,6 +17,7 @@ jobs:
 
       # Step 2: SSH into EC2 and deploy
       - name: Deploy via SSH
+        continue-on-error: true
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -25,7 +26,7 @@ jobs:
           port: 22
           script: |
             echo "=== Pulling latest code ==="
-            cd ~/havento
+            cd ~/havento-accomodation-booking-platform || cd ~/havento
             git pull origin main
 
             echo "=== Installing dependencies ==="
