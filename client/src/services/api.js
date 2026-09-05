@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3009';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -23,7 +23,7 @@ export const login = (email, password) => api.post('/api/auth/login', { email, p
 export const signup = (userData) => api.post('/api/auth/signup', userData);
 export const logout = () => api.post('/api/auth/logout');
 
-export const getIndex = () => api.get('/api');
+export const getIndex = () => api.get('/api/homes');
 export const getHomes = () => api.get('/api/homes');
 export const getHomeDetails = (homeId) => api.get(`/api/homes/${homeId}`);
 export const getBookings = () => api.get('/api/bookings');
@@ -60,5 +60,11 @@ export const deleteHome = (homeId) => api.post(`/api/host/delete-home/${homeId}`
 
 // AI Agent
 export const chatAgent = (message, chatHistory = []) => api.post('/api/agent/chat', { message, chatHistory });
+
+// Revenue Intelligence & ML Dynamic Pricing
+export const predictDynamicPrice = (data) => api.post('/api/analytics/pricing/predict', data);
+export const getHomePricingAnalysis = (homeId) => api.get(`/api/analytics/pricing/home/${homeId}`);
+export const getHostRevenueMetrics = () => api.get('/api/analytics/host/metrics');
+export const getMarketOverview = () => api.get('/api/analytics/market/overview');
 
 export default api;

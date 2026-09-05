@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getHomeDetails, addToFavourite, createBooking } from '../../services/api';
+import { getHomeDetails, addToFavourite, createBooking, getHomePricingAnalysis } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import Navbar from '../../components/Navbar';
 import { getImageUrl } from '../../config/api';
@@ -9,6 +9,7 @@ import BookingModal from '../../components/BookingModal';
 const HomeDetail = () => {
   const { homeId } = useParams();
   const [home, setHome] = useState(null);
+  const [pricingAnalysis, setPricingAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0); 
@@ -25,6 +26,14 @@ const HomeDetail = () => {
       const response = await getHomeDetails(homeId);
       if (response.data.success) {
         setHome(response.data.home);
+      }
+      try {
+        const pricingRes = await getHomePricingAnalysis(homeId);
+        if (pricingRes.data?.success) {
+          setPricingAnalysis(pricingRes.data);
+        }
+      } catch (err) {
+        // non-blocking
       }
     } catch (error) {
       console.error('Error fetching home details:', error);
@@ -335,6 +344,28 @@ const HomeDetail = () => {
                   <span className="text-3xl font-bold">₹{home.price}</span>
                   <span className="text-gray-600">/ night</span>
                 </div>
+
+                {pricingAnalysis && (
+                  <div className="mt-3 p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs space-y-1">
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="text-amber-900 flex items-center gap-1">
+                        <span>✨</span> Fair Market Rate: ₹{pricingAnalysis.recommended_price}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-extrabold ${
+                        pricingAnalysis.pricing_status === 'underpriced'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : pricingAnalysis.pricing_status === 'overpriced'
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {pricingAnalysis.pricing_status}
+                      </span>
+                    </div>
+                    <p className="text-slate-500 text-[11px] leading-tight">
+                      {pricingAnalysis.strategic_advice}
+                    </p>
+                  </div>
+                )}
               </div>
               
               <div className="space-y-3">

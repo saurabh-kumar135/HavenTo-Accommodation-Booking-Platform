@@ -29,6 +29,15 @@ const Navbar = ({ currentPage }) => {
                 <span className="font-semibold">HavenTo</span>
               </Link>
             </li>
+            <li>
+              <Link
+                to="/pricing-intelligence"
+                className={`${currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-3 rounded-lg transition duration-300 flex items-center gap-1.5`}
+              >
+                <span>✨</span>
+                <span>Pricing Intelligence</span>
+              </Link>
+            </li>
 
             {isLoggedIn && (
               <>
@@ -160,6 +169,12 @@ const Navbar = ({ currentPage }) => {
           {mobileMenuOpen && (
             <div className="mt-2">
               <ul className="flex flex-col space-y-1 border-t border-[#C4A57B] pt-2 mt-2">
+                <li>
+                  <Link to="/pricing-intelligence" className={`${currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-3 rounded-lg flex items-center gap-1.5`}>
+                    <span>✨</span>
+                    <span>Pricing Intelligence</span>
+                  </Link>
+                </li>
                 {isLoggedIn ? (
                   <>
                     {user && user.userType === 'guest' ? (

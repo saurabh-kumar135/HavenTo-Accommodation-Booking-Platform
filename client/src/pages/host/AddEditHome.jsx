@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { addHome, editHome, getEditHome } from '../../services/api';
+import { addHome, editHome, getEditHome, predictDynamicPrice } from '../../services/api';
 import Navbar from '../../components/Navbar';
 import ErrorAlert from '../../components/ErrorAlert';
 
@@ -19,6 +19,36 @@ const AddEditHome = () => {
   const [photos, setPhotos] = useState([]); 
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [mlRecommendation, setMlRecommendation] = useState(null);
+  const [loadingMl, setLoadingMl] = useState(false);
+
+  const handleSuggestMLPrice = async () => {
+    setLoadingMl(true);
+    try {
+      const res = await predictDynamicPrice({
+        location: formData.location.trim() || 'Taharpur',
+        category: 'Trending',
+        guests: 4,
+        rating: parseFloat(formData.rating) || 4.8
+      });
+      if (res.data?.success) {
+        setMlRecommendation(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to get ML price recommendation:', err);
+    } finally {
+      setLoadingMl(false);
+    }
+  };
+
+  const handleApplyMLPrice = () => {
+    if (mlRecommendation?.recommended_price) {
+      setFormData(prev => ({
+        ...prev,
+        price: mlRecommendation.recommended_price
+      }));
+    }
+  };
 
   useEffect(() => {
     if (isEditing) {
@@ -117,15 +147,48 @@ const AddEditHome = () => {
             className="w-full px-4 py-2 mb-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
             required
           />
-          <input
-            type="text"
-            name="price"
-            value={formData.price}
-            onChange={handleChange}
-            placeholder="Price Per Night"
-            className="w-full px-4 py-2 mb-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
-            required
-          />
+          <div className="mb-4">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                name="price"
+                value={formData.price}
+                onChange={handleChange}
+                placeholder="Price Per Night (₹ or $)"
+                className="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                required
+              />
+              <button
+                type="button"
+                onClick={handleSuggestMLPrice}
+                disabled={loadingMl}
+                className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 px-3 py-2 rounded-md text-xs font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                title="Get algorithmic price suggestion based on location & market demand"
+              >
+                {loadingMl ? 'Evaluating...' : '✨ Suggest ML Price'}
+              </button>
+            </div>
+
+            {mlRecommendation && (
+              <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs">
+                <div>
+                  <span className="font-semibold text-emerald-800">
+                    ML Benchmark: ₹{mlRecommendation.recommended_price}/night
+                  </span>
+                  <span className="ml-2 text-emerald-600 font-medium">
+                    ({mlRecommendation.demand_tier})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleApplyMLPrice}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded text-[11px] transition cursor-pointer"
+                >
+                  Apply
+                </button>
+              </div>
+            )}
+          </div>
           <input
             type="text"
             name="location"
