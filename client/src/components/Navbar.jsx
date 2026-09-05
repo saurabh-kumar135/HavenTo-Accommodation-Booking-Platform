@@ -69,6 +69,17 @@ const Navbar = ({ currentPage }) => {
                         Bookings
                       </Link>
                     </li>
+                    <li>
+                      <Link
+                        to="/host/pricing-intelligence"
+                        className={`${currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-4 rounded-lg transition duration-300 flex items-center`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mr-1">
+                          <path d="M18.375 2.25c-1.035 0-1.875.84-1.875 1.875v15.75c0 1.035.84 1.875 1.875 1.875h.75c1.035 0 1.875-.84 1.875-1.875V4.125c0-1.036-.84-1.875-1.875-1.875h-.75zM9.75 8.625c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v11.25c0 1.035-.84 1.875-1.875 1.875h-.75a1.875 1.875 0 01-1.875-1.875V8.625zM3 13.125c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v6.75c0 1.035-.84 1.875-1.875 1.875h-.75A1.875 1.875 0 013 19.875v-6.75z" />
+                        </svg>
+                        Revenue Insights
+                      </Link>
+                    </li>
                   </>
                 ) : (
                   <>
@@ -188,6 +199,11 @@ const Navbar = ({ currentPage }) => {
                         <li>
                           <Link to="/bookings" className={`${currentPage === 'bookings' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-3 rounded-lg flex items-center`}>
                             Bookings
+                          </Link>
+                        </li>
+                        <li>
+                          <Link to="/host/pricing-intelligence" className={`${currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-3 rounded-lg flex items-center`}>
+                            Revenue Insights
                           </Link>
                         </li>
                       </>
