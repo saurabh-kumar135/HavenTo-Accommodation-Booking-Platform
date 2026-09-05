@@ -67,7 +67,16 @@ function App() {
                 <HostHomeList />
               </ProtectedRoute>
             } />
-            <Route path="/pricing-intelligence" element={<PricingIntelligence />} />
+            <Route path="/host/pricing-intelligence" element={
+              <ProtectedRoute>
+                <PricingIntelligence />
+              </ProtectedRoute>
+            } />
+            <Route path="/pricing-intelligence" element={
+              <ProtectedRoute>
+                <PricingIntelligence />
+              </ProtectedRoute>
+            } />
             <Route path="/host/analytics" element={
               <ProtectedRoute>
                 <PricingIntelligence />

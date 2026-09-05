@@ -29,15 +29,6 @@ const Navbar = ({ currentPage }) => {
                 <span className="font-semibold">HavenTo</span>
               </Link>
             </li>
-            <li>
-              <Link
-                to="/pricing-intelligence"
-                className={`${currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-3 rounded-lg transition duration-300 flex items-center gap-1.5`}
-              >
-                <span>✨</span>
-                <span>Pricing Intelligence</span>
-              </Link>
-            </li>
 
             {isLoggedIn && (
               <>
@@ -91,6 +82,17 @@ const Navbar = ({ currentPage }) => {
                           <path fillRule="evenodd" d="M3 20.25v-8.755c1.42.674 3.08.673 4.5 0A5.234 5.234 0 009.75 12c.804 0 1.568-.182 2.25-.506a5.234 5.234 0 002.25.506c.804 0 1.567-.182 2.25-.506 1.42.674 3.08.675 4.5.001v8.755h.75a.75.75 0 010 1.5H2.25a.75.75 0 010-1.5H3zm3-6a.75.75 0 01.75-.75h3a.75.75 0 01.75.75v3a.75.75 0 01-.75.75h-3a.75.75 0 01-.75-.75v-3zm8.25-.75a.75.75 0 00-.75.75v5.25c0 .414.336.75.75.75h3a.75.75 0 00.75-.75v-5.25a.75.75 0 00-.75-.75h-3z" clipRule="evenodd" />
                         </svg>
                         Host Homes
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        to="/host/pricing-intelligence"
+                        className={`${currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-4 rounded-lg transition duration-300 flex items-center`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mr-1">
+                          <path d="M18.375 2.25c-1.035 0-1.875.84-1.875 1.875v15.75c0 1.035.84 1.875 1.875 1.875h.75c1.035 0 1.875-.84 1.875-1.875V4.125c0-1.036-.84-1.875-1.875-1.875h-.75zM9.75 8.625c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v11.25c0 1.035-.84 1.875-1.875 1.875h-.75a1.875 1.875 0 01-1.875-1.875V8.625zM3 13.125c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v6.75c0 1.035-.84 1.875-1.875 1.875h-.75A1.875 1.875 0 013 19.875v-6.75z" />
+                        </svg>
+                        Revenue Insights
                       </Link>
                     </li>
                     <li>
@@ -169,12 +171,6 @@ const Navbar = ({ currentPage }) => {
           {mobileMenuOpen && (
             <div className="mt-2">
               <ul className="flex flex-col space-y-1 border-t border-[#C4A57B] pt-2 mt-2">
-                <li>
-                  <Link to="/pricing-intelligence" className={`${currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-3 rounded-lg flex items-center gap-1.5`}>
-                    <span>✨</span>
-                    <span>Pricing Intelligence</span>
-                  </Link>
-                </li>
                 {isLoggedIn ? (
                   <>
                     {user && user.userType === 'guest' ? (
@@ -200,6 +196,11 @@ const Navbar = ({ currentPage }) => {
                         <li>
                           <Link to="/host/host-home-list" className={`${currentPage === 'host-homes' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-3 rounded-lg flex items-center`}>
                             Host Homes
+                          </Link>
+                        </li>
+                        <li>
+                          <Link to="/host/pricing-intelligence" className={`${currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-3 rounded-lg flex items-center`}>
+                            Revenue Insights
                           </Link>
                         </li>
                         <li>
