@@ -1,211 +1,215 @@
-# 🏡 HavenTo - Accommodation Booking Platform (Python Stack)
+# 🏡 HavenTo - Accommodation Booking Platform (Node.js & Express)
 
-[![CI/CD Pipeline](https://github.com/saurabh-kumar135/havento-accomodation-booking-platform/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/saurabh-kumar135/havento-accomodation-booking-platform/actions/workflows/ci-cd.yml)
-[![EC2 Deployment](https://github.com/saurabh-kumar135/havento-accomodation-booking-platform/actions/workflows/deploy.yml/badge.svg)](https://github.com/saurabh-kumar135/havento-accomodation-booking-platform/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org/)
+[![Express.js](https://img.shields.io/badge/Framework-Express_4.21-blue.svg)](https://expressjs.com/)
+[![MongoDB](https://img.shields.io/badge/Database-MongoDB_Atlas-brightgreen.svg)](https://www.mongodb.com/)
 
-A modern, high-performance vacation rental & accommodation booking platform converted from Node.js/Express to **Python FastAPI (3.12)** while preserving 100% architectural parity with the original codebase.
-
-Featuring an **autonomous AI Travel Concierge** (Groq LLM + MongoDB Tool Calling + RAG Memory), **MongoDB Atlas & GridFS** photo streaming, and a production **React (Vite + TailwindCSS)** client.
-
----
-
-## 🌐 Live Production Deployments
-
-* **Frontend Web App (Vercel)**: [**https://havento.vercel.app**](https://havento.vercel.app)
-* **Backend API & Swagger Docs (AWS EC2)**: [**https://havento.duckdns.org/docs**](https://havento.duckdns.org/docs)
-* **API Health Status**: [**https://havento.duckdns.org/api/health**](https://havento.duckdns.org/api/health)
+A modern, production-ready vacation rental and accommodation booking platform built with **Node.js, Express, MongoDB (Mongoose), and React (Vite)**. Featuring an **Autonomous AI Travel Concierge** powered by Groq LLM tool calling, OTP email verification, secure session & JWT authentication, and enterprise-grade DDoS protection.
 
 ---
 
 ## ⚡ Key Highlights
 
-* **Dynamic Pricing Machine Learning Engine**: Scikit-learn multi-variable regression model (`RandomForestRegressor`, $R^2 = 0.9066$, $\text{MAE} = ₹2,039$) trained on real property distributions across Indian tourist and metropolitan hubs. Computes optimal night rates (₹ INR), dynamic price corridors, seasonality surges, and demand tiers.
-* **Host Revenue Intelligence & Marketplace KPIs**: Real-time aggregation of active booking transactions calculating ADR (Average Daily Rate), RevPAR (Revenue Per Available Room), Occupancy Rate, and Projected ML Revenue Uplift.
-* **Role-Based Access Control (RBAC)**: Strict host-exclusive route guards (`isLoggedIn && user.userType === 'host'`) protecting host financial metrics and listing optimization tools.
-* **Autonomous AI Travel Concierge**: Powered by Groq LLM with function/tool calling (`searchHomes`, `getHomeDetails`, `getUserBookings`, `predictDynamicPricing`) and real-time MongoDB search across any location or property.
-* **1:1 MVC Architectural Mirroring**: Directly mirrors the original Node.js/Express layout (`controllers/`, `routes/`, `models/`, `middleware/`, `services/`, `utils/`, `rag_service/`, `ml/`, `app.py`).
-* **Dual-Tier Image Streaming**: Binary media served directly from MongoDB Atlas GridFS buckets (`photos.files`/`photos.chunks`) with automatic fallback to high-resolution CDNs.
-* **Complete Booking & Cancellation Lifecycle**: Real-time date reservation, dynamic price calculation, and strict 24-hour cancellation policies with verified reasoning.
-* **Enterprise Authentication**: Bcrypt password hashing, JWT sessions, OTP email verification via Gmail SMTP/OAuth2, and password reset workflows.
-* **Containerized Deployment**: Multi-stage Docker setup with Nginx reverse proxy and automated EC2 deployment via GitHub Actions.
+* **Autonomous AI Travel Concierge**: Powered by Groq LLM (`qwen` series) with native function/tool calling (`searchHomes`, `getHomeDetails`, `createBooking`, `cancelBooking`, `manageFavourites`) interacting directly with MongoDB.
+* **Full-Stack Architecture**: High-performance RESTful backend in Express.js paired with a modern **React 18 + Vite + TailwindCSS** client SPA and EJS server-rendered views.
+* **Dual Authentication System**: Supports both cookie-based `express-session` (backed by `connect-mongodb-session`) and stateless **JWT tokens** for web and mobile clients.
+* **Email Verification & Password Reset**: 6-digit OTP email verification and secure, time-limited password reset tokens dispatched via **Nodemailer (Gmail SMTP/OAuth2)** and **Resend**.
+* **Host & Guest Portals**:
+  * **Guests**: Browse stays, search with multi-parameter filters (location, budget, rating), manage favorites, and book accommodations.
+  * **Hosts**: List properties with photo uploads, manage pricing and amenities, and oversee reservation requests.
+* **Enterprise Security & DDoS Hardening**:
+  * **Rate Limiting**: Strict rate-limit tiers via `express-rate-limit` for OTP dispatch, authentication, password reset, and general API endpoints.
+  * **Security Headers**: Comprehensive header hardening via `helmet`.
+  * **Password Security**: Salted Bcrypt password hashing (10 salt rounds).
+  * **CORS**: Environment-aware origin validation with credentials support.
+* **Image & File Uploads**: Multi-part form handling with `multer` supporting disk and MongoDB GridFS storage.
+* **Containerization**: Production Docker setup with `Dockerfile` and `compose.yaml`.
 
 ---
 
-## 🏗️ Architecture & Codebase Map
+## 🛠️ Tech Stack
+
+### Backend
+* **Runtime**: Node.js (v18.x / v20.x)
+* **Framework**: Express.js (v4.21)
+* **Database & ODM**: MongoDB Atlas with Mongoose (v8.12)
+* **Session Store**: `express-session` with `connect-mongodb-session`
+* **Authentication**: JWT (`jsonwebtoken`) & `bcryptjs`
+* **AI & Agent Service**: Groq SDK (`groq-sdk`) with tool/function calling
+* **Email Services**: Nodemailer (Gmail SMTP) & Resend
+* **File Uploads**: Multer
+* **Security**: Helmet, Express Rate Limit, CORS, Express Validator
+* **Mobile Support**: Expo Server SDK (`expo-server-sdk`)
+
+### Frontend
+* **SPA Framework**: React 18
+* **Build Tool**: Vite
+* **Styling**: TailwindCSS
+* **Routing**: React Router v6
+* **Templating**: EJS (for server-rendered flows and email templates)
+
+---
+
+## 🏗️ Project Structure
 
 ```text
-havento-accomodation-booking-platform/
-├── backend/                              # Python FastAPI Application
-│   ├── app.py                            # Server entrypoint, CORS, GridFS streaming & routes
-│   ├── config.py                         # Environment configurations & defaults
-│   ├── controllers/                      # Request handling logic
-│   │   ├── authController.py             # Login, signup, sessions, Google auth
-│   │   ├── emailVerificationController.py# 6-digit OTP dispatch & validation
-│   │   ├── passwordResetController.py    # Token generation & password reset
-│   │   ├── storeController.py            # Home browsing, favourites & bookings
-│   │   ├── hostController.py             # Host property creation, edits & reservations
-│   │   ├── agentController.py            # AI concierge chat endpoints & memory clear
-│   │   └── analyticsController.py        # Dynamic pricing & host financial KPI endpoints
-│   ├── routes/                           # Router definitions mapping endpoints to controllers
-│   │   ├── authRouter.py                 # /api/auth/*
-│   │   ├── emailVerificationRoutes.py    # /api/auth/verify-otp, resend-otp
-│   │   ├── passwordResetRoutes.py        # /api/auth/reset-password/*
-│   │   ├── storeRouter.py                # /api/homes, /api/store/*
-│   │   ├── hostRouter.py                 # /api/host/*
-│   │   ├── agentRouter.py                # /api/agent/*
-│   │   └── analyticsRouter.py            # /api/analytics/* (Pricing & Revenue Intelligence)
-│   ├── models/                           # Beanie ODM MongoDB Document Schemas
-│   │   ├── user.py                       # User profile & credentials
-│   │   ├── home.py                       # Property listings & amenities
-│   │   ├── booking.py                    # Reservations & cancellation policies
-│   │   ├── pendingVerification.py        # Pending registration OTP records
-│   │   └── passwordReset.py              # Password reset tokens
-│   ├── middleware/                       # Security & authentication middleware
-│   │   └── auth.py                       # JWT token verification (User & Host guards)
-│   ├── ml/                               # Machine Learning Pipeline
-│   │   ├── train_pricing_model.py        # Pipeline training on MongoDB property data
-│   │   ├── preprocessors.py              # Amenity tokenizers & feature transforms
-│   │   └── models/                       # Serialized RandomForest model & metadata
-│   ├── services/                         # Business & AI logic
-│   │   ├── agentService.py               # Groq LLM tool-calling loop & dynamic search
-│   │   └── pricingService.py             # Algorithmic pricing, ADR, RevPAR, & valuation drivers
-│   ├── utils/                            # Shared utilities
-│   │   ├── databaseUtil.py               # MongoDB Atlas connection & GridFS bucket
-│   │   ├── emailService.py               # Gmail OAuth2 & SMTP transactional email
-│   │   └── security.py                   # Bcrypt hashing & JWT token handling
-│   ├── rag_service/                      # RAG vector similarity & memory persistence
-│   │   └── memory.py                     # Context-aware user conversation memory
-│   ├── tests/                            # Pytest test suite (Health, Auth, Analytics)
-│   ├── Dockerfile                        # Production backend container definition
-│   └── requirements.txt                  # Lean production dependencies
-├── client/                               # React + Vite Frontend
-│   ├── Dockerfile                        # Production Nginx multi-stage build
-│   ├── nginx.conf                        # Reverse proxy for /api and /uploads + SPA routing
-│   └── src/                              # React components, state & pages
-│       ├── pages/host/                   # Host dashboard & PricingIntelligence.jsx
-│       └── pages/store/                  # Marketplace listings & HomeDetail.jsx
-├── docker-compose.yml                    # Multi-container local & cloud orchestration
-└── .github/workflows/                    # CI/CD automation pipelines
-    ├── ci-cd.yml                         # Automated Flake8 linting, Pytest, and Docker build
-    └── deploy.yml                        # Automated deployment to AWS EC2 via SSH
+HavenTo/
+├── client/                      # React 18 + Vite + TailwindCSS Frontend SPA
+│   ├── src/
+│   │   ├── components/          # Reusable UI components (Navbar, Cards, Modals)
+│   │   ├── context/             # React Context providers (Auth, Booking)
+│   │   ├── pages/               # Views (Home, PropertyDetail, Host, Bookings)
+│   │   └── services/            # API integration services (Axios/Fetch)
+│   ├── package.json             # Frontend dependencies
+│   └── vite.config.js           # Vite configuration
+├── controllers/                 # Express MVC Route Controllers
+│   ├── authController.js        # User signup, login, session & JWT handling
+│   ├── emailVerificationController.js # 6-digit email OTP generation & verification
+│   ├── passwordResetController.js     # Password reset token issuance & updates
+│   ├── storeController.js       # Property search, filtering, favorites & booking
+│   ├── hostController.js        # Host property listing creation, edits & reservations
+│   └── agentController.js       # Groq AI concierge chat endpoint
+├── middleware/                  # Custom Express Middleware
+│   ├── auth.js                  # Session & JWT authentication guards
+│   └── rateLimiter.js           # DDoS protection & endpoint rate limits
+├── models/                      # Mongoose Schemas & Models
+│   ├── user.js                  # User credentials, roles (guest/host), verification status
+│   ├── home.js                  # Property listings, amenities, pricing, location
+│   └── booking.js               # Reservations, check-in/out dates, status, cancellation
+├── routes/                      # Express Route Definitions
+│   ├── authRouter.js            # /api/auth (Login, register, logout)
+│   ├── emailVerificationRoutes.js # /api/auth/verify-otp, resend-otp
+│   ├── passwordResetRoutes.js   # /api/auth/reset-password/*
+│   ├── storeRouter.js           # /api/homes, /api/store/*
+│   ├── hostRouter.js            # /api/host/*
+│   └── agentRouter.js           # /api/agent (AI travel concierge)
+├── services/                    # Business & Integration Services
+│   └── agentService.js          # Groq LLM tool-calling loop & MongoDB execution
+├── utils/                       # Shared Utilities
+│   ├── emailService.js          # Nodemailer & Resend email dispatchers
+│   ├── otpService.js            # OTP generation, expiration & validation
+│   ├── otpStorage.js            # In-memory / cache OTP storage
+│   ├── pathUtil.js              # Filesystem path helpers
+│   └── pushNotifications.js     # Expo push notification dispatch
+├── views/                       # Server-side EJS templates
+├── public/                      # Static assets (compiled CSS, client JS, icons)
+├── uploads/                     # User-uploaded property media
+├── .env.example                 # Environment configuration template
+├── app.js                       # Express server entry point & middleware pipeline
+├── Dockerfile                   # Backend Docker container definition
+├── compose.yaml                 # Docker Compose local orchestration
+└── package.json                 # Node dependencies and npm scripts
 ```
 
 ---
 
-## 📊 Machine Learning Dynamic Pricing & Host Revenue Intelligence
+## 🚦 Getting Started
 
-HavenTo integrates a production-grade machine learning model designed to optimize marketplace pricing efficiency for hosts while ensuring competitive rates for guests.
+### Prerequisites
+* **Node.js**: v18.x or v20.x
+* **npm**: v9.x or higher
+* **MongoDB**: Local MongoDB instance or MongoDB Atlas URI
+* **Groq API Key**: For the AI travel concierge assistant
 
-### 1. Mathematical & ML Architecture
-- **Model**: Multi-variable `RandomForestRegressor` (140 estimators, max depth 12) trained on real-world Indian hospitality market distributions (Udaipur, Mumbai, Goa, Jaipur, Darjeeling, Kerala, Manali, Shimla, etc.).
-- **Performance Metrics**:
-  - **$R^2$ Score**: `0.9066`
-  - **Mean Absolute Error (MAE)**: `₹2,039`
-  - **Root Mean Squared Error (RMSE)**: `₹2,776`
-  - **Mean Absolute Percentage Error (MAPE)**: `11.58%`
-- **Engineered Features**:
-  - **Categorical & Geospatial**: Target-encoded location tiers, property category (Palace, Villa, Tent, Suite, Apartment).
-  - **Capacity & Elasticity**: Guest capacity scaling, bedroom-to-guest ratios.
-  - **Multi-hot Amenity Encoding**: Pool, Garden, Kitchen, Wi-Fi, Air Conditioning, Mountain/Sea views.
-  - **Temporal Multipliers**: Weekend surge pricing (`+15%`), high-season multipliers (`+25%`).
-
-### 2. Marketplace Revenue Analytics KPIs
-- **Average Daily Rate (ADR)**: $\frac{\text{Total Room Revenue}}{\text{Total Booked Nights}}$
-- **Occupancy Rate**: $\frac{\text{Total Booked Nights}}{\text{Total Available Calendar Nights}} \times 100\%$
-- **RevPAR (Revenue Per Available Room)**: $\text{ADR} \times \text{Occupancy Rate}$
-- **Dynamic Price Corridor**: Algorithmically calculated lower bound ($-15\%$) and upper bound ($+18\%$) providing hosts with risk-adjusted listing pricing.
-
-### 3. Host Exclusive Access & UI Integration
-- Strict **Role-Based Access Control (RBAC)** ensures only authenticated hosts (`userType === 'host'`) can access revenue intelligence dashboards and individual listing recommendations.
-- **✨ Suggest ML Price**: Directly embedded into the property listing creation flow, allowing hosts to calculate and apply optimal rates with one click in Indian Rupees (₹).
-- **Concierge Tool Integration**: Available to the autonomous Groq LLM agent via `predictDynamicPricing` function calling.
-
-## 🚀 Quick Start Guide
-
-### 1. Run with Docker Compose (Recommended)
-
-To run the complete full-stack application (Frontend + Backend + Proxy) locally:
-
+### 1. Clone the Repository
 ```bash
-# Clone the repository
-git clone https://github.com/saurabh-kumar135/havento-accomodation-booking-platform.git
-cd havent-accomodation-booking-platform
-
-# Set up environment variables
-cp backend/.env.example backend/.env
-
-# Build and start all services
-docker compose up -d --build
+git clone https://github.com/saurabh-kumar135/HavenTo-Accommodation-Booking-Platform.git
+cd HavenTo-Accommodation-Booking-Platform
 ```
 
-Access points:
-* **Web UI**: [http://localhost](http://localhost)
-* **FastAPI Docs (Swagger UI)**: [http://localhost:3009/docs](http://localhost:3009/docs)
-* **Backend Health Check**: [http://localhost/api/health](http://localhost/api/health)
-
----
-
-### 2. Manual Local Development
-
-#### Backend Setup:
+### 2. Backend Setup
+Install root dependencies:
 ```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-
-pip install -r requirements.txt
-cp .env.example .env    # Configure your MongoDB URI and API keys
-uvicorn app:app --host 0.0.0.0 --port 3009 --reload
+npm install
 ```
 
-#### Frontend Setup:
+Create a `.env` file in the root directory:
+```env
+# Server
+PORT=3009
+NODE_ENV=development
+FRONTEND_URL=http://localhost:5173
+SESSION_SECRET=your_strong_session_secret
+JWT_SECRET=your_jwt_secret_key
+
+# Database
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/HavenTo?retryWrites=true&w=majority
+
+# AI Concierge (Groq)
+GROQ_API_KEY=gsk_your_groq_api_key
+
+# Email Service (Gmail SMTP / OAuth2)
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_gmail_app_password
+# Or Resend
+RESEND_API_KEY=re_your_resend_api_key
+```
+
+Start the backend in development mode:
+```bash
+npm run dev
+```
+The backend server runs on `http://localhost:3009`.
+
+### 3. Frontend Setup (React SPA)
+In a separate terminal, navigate to the `client` directory:
 ```bash
 cd client
 npm install
+```
+
+Create a `.env` file inside `client/`:
+```env
+VITE_API_URL=http://localhost:3009
+```
+
+Start the Vite development server:
+```bash
 npm run dev
 ```
+The React frontend runs on `http://localhost:5173`.
 
 ---
 
-## 🧪 Testing
+## 🤖 Autonomous AI Travel Concierge
 
-Execute the automated test suite verifying health endpoints, authentication flows, and AI concierge search:
+HavenTo features an integrated AI booking agent implemented in `services/agentService.js`. Powered by Groq's high-speed inference engine, the agent uses function/tool calling to execute actions against the live database:
+
+* **`searchHomes(location, maxPrice, minRating)`**: Queries MongoDB for available stays matching user constraints.
+* **`getHomeDetails(homeId)`**: Fetches comprehensive property descriptions, host info, and amenities.
+* **`createBooking(homeId, checkIn, checkOut, guests)`**: Automates reservation creation for verified users.
+* **`cancelBooking(bookingId, reason)`**: Executes booking cancellations complying with 24-hour lead-time rules.
+* **`manageFavourites(action, homeId)`**: Adds or removes properties from the user's wishlist.
+
+---
+
+## 🛡️ Security & DDoS Protection Details
+
+| Endpoint Category | Rate Limit | Time Window | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Email OTP Dispatch** | 3 requests | 15 minutes | Prevents email inbox bombing & SMS/email spam |
+| **Password Reset** | 3 requests | 1 hour | Prevents token harvesting & resource exhaustion |
+| **Authentication (Login/Register)** | 5 attempts | 1 hour | Blocks brute-force credential stuffing attacks |
+| **General API Routes** | 100 requests | 15 minutes | Protects backend against high-volume DDoS floods |
+
+---
+
+## 🐳 Docker Deployment
+
+Run the complete backend stack with Docker:
 
 ```bash
-cd backend
-source .venv/bin/activate
-PYTHONPATH=. pytest tests -v
+docker compose up --build -d
 ```
 
 ---
 
-## 🤖 AI Travel Concierge Capabilities
+## 📝 License
 
-The HavenTo Assistant is equipped with real-time tool calling and semantic memory:
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
-* **Location Search**: Type queries like *"Find stays in Taharpur"*, *"Show beach villas in Goa"*, or *"Best homes in Mumbai under ₹10,000"*.
-* **Listing Inspection**: Inspect specific properties with *"Tell me more about Saurabh's home"* to get full details, ratings, and amenities.
-* **Reservation Assistance**: Guides users through booking policies, check-in requirements, and cancellation rules.
-* **Domain Guardrails**: Strict policy ensuring the assistant focuses solely on HavenTo accommodation services.
+## 👨‍💻 Author
 
----
-
-## 📦 Deployment Architecture
-
-* **AWS EC2 Production Server**:
-  - Ubuntu 24.04 LTS host with Python 3.12 virtual environment.
-  - Managed via `systemd` daemon: `havento-api.service`.
-  - Nginx reverse proxy with automated Let's Encrypt SSL on `https://havento.duckdns.org`.
-* **Vercel Production Frontend**:
-  - Continuous deployment connected to the React client repository.
-  - Automated edge asset compression and global CDN distribution.
-* **GitHub Actions CI/CD**:
-  - Continuous Integration: Checks code formatting, linting (`flake8`), and executes `pytest` tests on every push.
-  - Continuous Deployment: Automatically SSHs into AWS EC2, pulls the latest code, and restarts the service.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+**Saurabh Kumar**
+* GitHub: [@saurabh-kumar135](https://github.com/saurabh-kumar135)
