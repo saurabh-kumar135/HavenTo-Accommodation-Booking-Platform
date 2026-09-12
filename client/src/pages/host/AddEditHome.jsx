@@ -123,7 +123,11 @@ const AddEditHome = () => {
         setErrors([response.data.message || 'Operation failed']);
       }
     } catch (error) {
-      setErrors([error.response?.data?.message || 'An error occurred']);
+      const errData = error.response?.data;
+      const errMsg = errData?.detail 
+        ? (typeof errData.detail === 'string' ? errData.detail : (Array.isArray(errData.detail) ? errData.detail.map(d => d.msg || d.message).join(', ') : JSON.stringify(errData.detail)))
+        : (errData?.message || error.message || 'An error occurred');
+      setErrors([errMsg]);
     }
     setLoading(false);
   };
