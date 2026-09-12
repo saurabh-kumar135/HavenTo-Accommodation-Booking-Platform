@@ -39,24 +39,24 @@ export const getFavourites = () => api.get('/api/favourites');
 export const addToFavourite = (homeId) => api.post('/api/favourites', { id: homeId });
 export const removeFromFavourite = (homeId) => api.post(`/api/favourites/delete/${homeId}`);
 
-export const getAddHome = () => api.get('/api/host/add-home');
+export const getAddHome = () => api.get('/api/host/homes');
 export const addHome = (formData) => {
-  return api.post('/api/host/add-home', formData, {
+  return api.post('/api/host/homes', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
   });
 };
-export const getHostHomes = () => api.get('/api/host/host-home-list');
-export const getEditHome = (homeId) => api.get(`/api/host/edit-home/${homeId}?editing=true`);
+export const getHostHomes = () => api.get('/api/host/homes');
+export const getEditHome = (homeId) => api.get(`/api/host/homes/${homeId}?editing=true`);
 export const editHome = (formData) => {
-  return api.post('/api/host/edit-home', formData, {
+  return api.post('/api/host/homes/edit', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
   });
 };
-export const deleteHome = (homeId) => api.post(`/api/host/delete-home/${homeId}`);
+export const deleteHome = (homeId) => api.post(`/api/host/homes/delete/${homeId}`);
 
 // AI Agent
 export const chatAgent = (message, chatHistory = []) => api.post('/api/agent/chat', { message, chatHistory });
