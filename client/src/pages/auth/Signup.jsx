@@ -72,7 +72,7 @@ const Signup = () => {
           setErrors([
             <span key="err-existing">
               That email already exists. Please{' '}
-              <Link to="/login" state={{ email: formData.email }} className="font-semibold underline hover:text-red-900">
+              <Link to="/login" state={{ email: formData.email }} className="font-semibold underline text-rose-700 hover:text-rose-900">
                 log in
               </Link>.
             </span>
@@ -93,7 +93,7 @@ const Signup = () => {
         setErrors([
           <span key="err-existing">
             That email already exists. Please{' '}
-            <Link to="/login" state={{ email: formData.email }} className="font-semibold underline hover:text-red-900">
+            <Link to="/login" state={{ email: formData.email }} className="font-semibold underline text-rose-700 hover:text-rose-900">
               log in
             </Link>.
           </span>
@@ -278,7 +278,7 @@ const Signup = () => {
               required
             />
             <label htmlFor="terms" className="text-sm text-gray-700">
-              I agree to the <Link to="/terms" className="text-red-500 hover:underline">terms and conditions</Link>
+              I agree to the <Link to="/terms" className="text-rose-600 hover:underline">terms and conditions</Link>
             </label>
           </div>
 
@@ -320,7 +320,7 @@ const Signup = () => {
         </form>
 
         <p className="mt-6 text-center text-gray-600">
-          Already have an account? <Link to="/login" className="text-red-500 hover:underline font-medium">Log in</Link>
+          Already have an account? <Link to="/login" className="text-rose-600 hover:underline font-medium">Log in</Link>
         </p>
       </main>
     </>
