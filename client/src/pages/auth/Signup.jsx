@@ -68,7 +68,18 @@ const Signup = () => {
         });
       } else {
         const errorList = response.data.errors || ['Signup failed'];
-        setErrors(errorList);
+        if (errorList.some(e => typeof e === 'string' && (e.toLowerCase().includes('already registered') || e.toLowerCase().includes('already exists') || e.toLowerCase().includes('already in use')))) {
+          setErrors([
+            <span key="err-existing">
+              That email already exists. Please{' '}
+              <Link to="/login" state={{ email: formData.email }} className="font-semibold underline hover:text-red-900">
+                log in
+              </Link>.
+            </span>
+          ]);
+        } else {
+          setErrors(errorList);
+        }
       }
     } catch (error) {
       console.error('Signup error:', error);
@@ -76,9 +87,17 @@ const Signup = () => {
       if (
         typeof rawError === 'string' &&
         (rawError.toLowerCase().includes('already registered') ||
-         rawError.toLowerCase().includes('already exists'))
+         rawError.toLowerCase().includes('already exists') ||
+         rawError.toLowerCase().includes('already in use'))
       ) {
-        setErrors(['Email already in use']);
+        setErrors([
+          <span key="err-existing">
+            That email already exists. Please{' '}
+            <Link to="/login" state={{ email: formData.email }} className="font-semibold underline hover:text-red-900">
+              log in
+            </Link>.
+          </span>
+        ]);
       } else {
         setErrors([rawError]);
       }
