@@ -17,7 +17,6 @@ const Signup = () => {
   });
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [accountAlreadyExists, setAccountAlreadyExists] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
@@ -34,7 +33,6 @@ const Signup = () => {
     e.preventDefault();
     setLoading(true);
     setErrors([]);
-    setAccountAlreadyExists(false);
 
     if (formData.password !== formData.confirmPassword) {
       setErrors(['Passwords do not match']);
@@ -70,25 +68,19 @@ const Signup = () => {
         });
       } else {
         const errorList = response.data.errors || ['Signup failed'];
-        if (errorList.some(e => typeof e === 'string' && (e.toLowerCase().includes('already registered') || e.toLowerCase().includes('already exists')))) {
-          setAccountAlreadyExists(true);
-        } else {
-          setErrors(errorList);
-        }
+        setErrors(errorList);
       }
     } catch (error) {
       console.error('Signup error:', error);
-      const errMsg = error.response?.data?.errors?.[0] || error.response?.data?.detail || 'An error occurred';
+      const rawError = error.response?.data?.errors?.[0] || error.response?.data?.detail || 'An error occurred';
       if (
-        typeof errMsg === 'string' &&
-        (errMsg.toLowerCase().includes('already registered') ||
-         errMsg.toLowerCase().includes('already exists'))
+        typeof rawError === 'string' &&
+        (rawError.toLowerCase().includes('already registered') ||
+         rawError.toLowerCase().includes('already exists'))
       ) {
-        setAccountAlreadyExists(true);
-        setErrors([]);
+        setErrors(['An account with this email already exists. Please log in.']);
       } else {
-        setAccountAlreadyExists(false);
-        setErrors([errMsg]);
+        setErrors([rawError]);
       }
     } finally {
       setLoading(false);
@@ -101,30 +93,6 @@ const Signup = () => {
       <main className="container mx-auto mt-8 p-8 bg-white rounded-lg shadow-md max-w-md">
         <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Create Your Account</h1>
         
-        {accountAlreadyExists && (
-          <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl mb-4 text-sm text-amber-900 shadow-xs">
-            <div className="flex items-center gap-2 font-bold mb-1 text-amber-800">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-amber-600 shrink-0">
-                <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
-              </svg>
-              <span>Account Already Exists!</span>
-            </div>
-            <p className="text-xs text-amber-800 mb-3 leading-relaxed">
-              <strong>{formData.email}</strong> is already registered. You do not need to delete your data or register again — simply log in with your password.
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate('/login', { state: { email: formData.email } })}
-              className="w-full py-2.5 px-4 bg-[#A67C52] hover:bg-[#8B6F47] text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-2 shadow-sm"
-            >
-              <span>Log In with this Email</span>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-        )}
-
         <ErrorAlert errors={errors} />
 
         <form onSubmit={handleSubmit} className="space-y-4">
