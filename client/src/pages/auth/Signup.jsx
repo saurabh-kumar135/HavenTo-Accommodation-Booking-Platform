@@ -78,7 +78,7 @@ const Signup = () => {
         (rawError.toLowerCase().includes('already registered') ||
          rawError.toLowerCase().includes('already exists'))
       ) {
-        setErrors(['An account with this email already exists. Please log in.']);
+        setErrors(['Email already in use']);
       } else {
         setErrors([rawError]);
       }
