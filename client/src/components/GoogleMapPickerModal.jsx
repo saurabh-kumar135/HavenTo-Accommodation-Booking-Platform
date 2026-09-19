@@ -14,14 +14,15 @@ L.Icon.Default.mergeOptions({
 });
 
 const POPULAR_DESTINATIONS = [
+  { name: 'Taharpur, Bijnor, UP', lat: 29.5200, lng: 78.1800 },
+  { name: 'Kiratpur, Bijnor, UP', lat: 29.5045, lng: 78.2027 },
+  { name: 'Delhi, India', lat: 28.6139, lng: 77.2090 },
+  { name: 'Agra, Uttar Pradesh', lat: 27.1767, lng: 78.0081 },
   { name: 'Mumbai, Maharashtra', lat: 19.0760, lng: 72.8777 },
   { name: 'Goa, India', lat: 15.2993, lng: 74.1240 },
-  { name: 'Delhi, India', lat: 28.6139, lng: 77.2090 },
   { name: 'Bengaluru, Karnataka', lat: 12.9716, lng: 77.5946 },
   { name: 'Jaipur, Rajasthan', lat: 26.9124, lng: 75.7873 },
-  { name: 'Agra, Uttar Pradesh', lat: 27.1767, lng: 78.0081 },
   { name: 'Manali, Himachal Pradesh', lat: 32.2432, lng: 77.1892 },
-  { name: 'Shimla, Himachal Pradesh', lat: 31.1048, lng: 77.1734 },
   { name: 'Rishikesh, Uttarakhand', lat: 30.0869, lng: 78.2676 },
 ];
 
@@ -190,12 +191,14 @@ const GoogleMapPickerModal = ({
     }
 
     let resolved = false;
+    // On phones with satellite GPS, locking can take 5-8 seconds; allow 9.5 seconds before IP fallback
     const fallbackTimer = setTimeout(() => {
       if (!resolved) {
         resolved = true;
+        console.warn('Satellite GPS timed out, using network IP fallback');
         fetchIpLocation();
       }
-    }, 3800);
+    }, 9500);
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
@@ -231,7 +234,7 @@ const GoogleMapPickerModal = ({
         clearTimeout(fallbackTimer);
         fetchIpLocation();
       },
-      { timeout: 3500, enableHighAccuracy: false, maximumAge: 300000 }
+      { timeout: 9000, enableHighAccuracy: true, maximumAge: 60000 }
     );
   };
 
