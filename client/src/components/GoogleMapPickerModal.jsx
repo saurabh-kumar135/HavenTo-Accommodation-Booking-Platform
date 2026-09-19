@@ -42,11 +42,57 @@ const GoogleMapPickerModal = ({
 
   if (!isOpen) return null;
 
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      setSelectedLocation(searchQuery.trim());
+  const [searching, setSearching] = useState(false);
+
+  const isGenericCentroid = (lat, lng, accuracy) => {
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (isNaN(latNum) || isNaN(lngNum)) return false;
+    // Check if coordinates point to India's geographic centroid (Hirdi, Maharashtra ~20.5937, ~78.9629)
+    // which desktop browsers return as country-level dummy fallback
+    const isNearHirdi =
+      Math.abs(latNum - 20.5938) < 0.35 &&
+      Math.abs(lngNum - 78.9629) < 0.35;
+    const isLowAccuracy = accuracy && accuracy > 10000;
+    return isNearHirdi || isLowAccuracy;
+  };
+
+  const handleSearchSubmit = async (e) => {
+    if (e) e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    setSearching(true);
+    setGeoError('');
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      if (res.ok) {
+        const results = await res.json();
+        if (results && results.length > 0) {
+          const first = results[0];
+          const lat = Number(first.lat).toFixed(6);
+          const lng = Number(first.lon).toFixed(6);
+          setLatitude(lat);
+          setLongitude(lng);
+          setSelectedLocation(first.display_name || q);
+          setSearchQuery(first.display_name || q);
+          setSearching(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Geocode search error:', err);
     }
+
+    // Fallback: set location by text query and clear lat/lng so Google Map uses text search directly
+    setSelectedLocation(q);
+    setLatitude('');
+    setLongitude('');
+    setSearching(false);
   };
 
   const handleSelectPopular = (dest) => {
@@ -90,37 +136,68 @@ const GoogleMapPickerModal = ({
 
   const fetchIpLocation = async () => {
     try {
+      // 1. Primary: ipwho.is
       const res = await fetch('https://ipwho.is/');
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.latitude && data.longitude) {
           const lat = Number(data.latitude).toFixed(6);
           const lng = Number(data.longitude).toFixed(6);
-          const placeName =
-            [data.city, data.region, data.country].filter(Boolean).join(', ') ||
-            `Location (${lat}, ${lng})`;
-          setLatitude(lat);
-          setLongitude(lng);
-          setSelectedLocation(placeName);
-          setSearchQuery(placeName);
-          setGeoError('');
-          setLocating(false);
-          return true;
+          if (!isGenericCentroid(lat, lng, 0)) {
+            const placeName =
+              [data.city, data.region, data.country].filter(Boolean).join(', ') ||
+              `Location (${lat}, ${lng})`;
+            setLatitude(lat);
+            setLongitude(lng);
+            setSelectedLocation(placeName);
+            setSearchQuery(placeName);
+            setGeoError('');
+            setLocating(false);
+            return true;
+          }
         }
       }
     } catch (e) {
-      console.warn('ipwho.is error, attempting secondary fallback:', e);
+      console.warn('ipwho.is error:', e);
     }
 
     try {
-      const res2 = await fetch('https://ipapi.co/json/');
+      // 2. Secondary: ipinfo.io
+      const res2 = await fetch('https://ipinfo.io/json');
       if (res2.ok) {
         const data2 = await res2.json();
-        if (data2.latitude && data2.longitude) {
-          const lat = Number(data2.latitude).toFixed(6);
-          const lng = Number(data2.longitude).toFixed(6);
+        if (data2.loc) {
+          const [ipLat, ipLng] = data2.loc.split(',');
+          if (ipLat && ipLng && !isGenericCentroid(ipLat, ipLng, 0)) {
+            const lat = Number(ipLat).toFixed(6);
+            const lng = Number(ipLng).toFixed(6);
+            const placeName =
+              [data2.city, data2.region, data2.country].filter(Boolean).join(', ') ||
+              `Location (${lat}, ${lng})`;
+            setLatitude(lat);
+            setLongitude(lng);
+            setSelectedLocation(placeName);
+            setSearchQuery(placeName);
+            setGeoError('');
+            setLocating(false);
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('ipinfo fallback error:', e);
+    }
+
+    try {
+      // 3. Tertiary: ipapi.co
+      const res3 = await fetch('https://ipapi.co/json/');
+      if (res3.ok) {
+        const data3 = await res3.json();
+        if (data3.latitude && data3.longitude && !isGenericCentroid(data3.latitude, data3.longitude, 0)) {
+          const lat = Number(data3.latitude).toFixed(6);
+          const lng = Number(data3.longitude).toFixed(6);
           const placeName =
-            [data2.city, data2.region, data2.country_name].filter(Boolean).join(', ') ||
+            [data3.city, data3.region, data3.country_name].filter(Boolean).join(', ') ||
             `Location (${lat}, ${lng})`;
           setLatitude(lat);
           setLongitude(lng);
@@ -157,16 +234,30 @@ const GoogleMapPickerModal = ({
         resolved = true;
         fetchIpLocation();
       }
-    }, 4500);
+    }, 4000);
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         if (resolved) return;
+
+        const rawLat = pos.coords.latitude;
+        const rawLng = pos.coords.longitude;
+        const accuracy = pos.coords.accuracy;
+
+        // If browser returns country center centroid (e.g. Hirdi) or low accuracy (>10km), use IP location
+        if (isGenericCentroid(rawLat, rawLng, accuracy)) {
+          console.warn('Browser returned country centroid or low accuracy, using IP fallback');
+          clearTimeout(fallbackTimer);
+          resolved = true;
+          await fetchIpLocation();
+          return;
+        }
+
         resolved = true;
         clearTimeout(fallbackTimer);
 
-        const lat = pos.coords.latitude.toFixed(6);
-        const lng = pos.coords.longitude.toFixed(6);
+        const lat = rawLat.toFixed(6);
+        const lng = rawLng.toFixed(6);
         setLatitude(lat);
         setLongitude(lng);
 
@@ -182,7 +273,7 @@ const GoogleMapPickerModal = ({
         console.warn('Device GPS unavailable, falling back to IP geolocation:', err?.message);
         fetchIpLocation();
       },
-      { timeout: 4000, enableHighAccuracy: false, maximumAge: 300000 }
+      { timeout: 3500, enableHighAccuracy: false, maximumAge: 300000 }
     );
   };
 
@@ -249,16 +340,28 @@ const GoogleMapPickerModal = ({
             </div>
             <button
               type="submit"
-              className="px-4 py-2.5 bg-[#A67C52] hover:bg-[#8B6F47] text-white text-xs font-semibold rounded-xl transition"
+              disabled={searching}
+              className="px-4 py-2.5 bg-[#A67C52] hover:bg-[#8B6F47] disabled:opacity-60 text-white text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shrink-0"
+              title="Search and pinpoint address"
             >
-              Search
+              {searching ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Searching...</span>
+                </>
+              ) : (
+                'Search'
+              )}
             </button>
             <button
               type="button"
               onClick={handleUseCurrentLocation}
               disabled={locating}
               className="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl transition flex items-center gap-1 shrink-0"
-              title="Locate via device GPS"
+              title="Auto-detect current location"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 ${locating ? 'animate-spin' : ''}`}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
@@ -267,6 +370,11 @@ const GoogleMapPickerModal = ({
               <span>{locating ? 'Locating...' : 'GPS'}</span>
             </button>
           </form>
+
+          <p className="text-[11px] text-gray-500 flex items-center gap-1">
+            <span>📍</span>
+            <span>You can search your exact colony, landmark, or street name above to pin your exact house.</span>
+          </p>
 
           {geoError && (
             <p className="text-xs text-rose-600 font-medium">{geoError}</p>
