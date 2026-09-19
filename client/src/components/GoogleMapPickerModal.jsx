@@ -14,8 +14,8 @@ L.Icon.Default.mergeOptions({
 });
 
 const POPULAR_DESTINATIONS = [
-  { name: 'Taharpur, Bijnor, UP', lat: 29.5200, lng: 78.1800 },
-  { name: 'Kiratpur, Bijnor, UP', lat: 29.5045, lng: 78.2027 },
+  { name: 'Bijnor, Uttar Pradesh', lat: 29.3695, lng: 78.1371 },
+  { name: 'Meerut, Uttar Pradesh', lat: 28.9845, lng: 77.7064 },
   { name: 'Delhi, India', lat: 28.6139, lng: 77.2090 },
   { name: 'Agra, Uttar Pradesh', lat: 27.1767, lng: 78.0081 },
   { name: 'Mumbai, Maharashtra', lat: 19.0760, lng: 72.8777 },
@@ -25,6 +25,30 @@ const POPULAR_DESTINATIONS = [
   { name: 'Manali, Himachal Pradesh', lat: 32.2432, lng: 77.1892 },
   { name: 'Rishikesh, Uttarakhand', lat: 30.0869, lng: 78.2676 },
 ];
+
+// Multi-attempt Nominatim search with India country bias
+const searchNominatim = async (query) => {
+  const attempts = [
+    `${query}, India`,
+    query,
+    `${query}, Uttar Pradesh, India`,
+  ];
+  for (const q of attempts) {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&countrycodes=in`,
+        { headers: { 'Accept-Language': 'en', 'User-Agent': 'HavenTo/1.0' } }
+      );
+      if (res.ok) {
+        const results = await res.json();
+        if (results && results.length > 0) return results[0];
+      }
+    } catch (e) {
+      console.warn('Nominatim search error:', e);
+    }
+  }
+  return null;
+};
 
 const TILE_LAYERS = {
   googleRoad: {
@@ -64,38 +88,49 @@ const GoogleMapPickerModal = ({
   const [searching, setSearching] = useState(false);
   const [geoError, setGeoError] = useState('');
   const [mapLayerType, setMapLayerType] = useState('googleRoad');
+  const [statusMsg, setStatusMsg] = useState('');
 
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
   const tileLayerRef = useRef(null);
 
-  // Reverse geocoding helper
+  // Reverse geocoding: zoom=18 gives building-level precision from Nominatim.
+  // Builds label from most granular field available (road → hamlet → village → town → city).
   const reverseGeocode = async (lat, lng) => {
     try {
+      // zoom=18 = building level, zoom=16 = street, zoom=10 = city
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
-        { headers: { 'Accept-Language': 'en' } }
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        { headers: { 'Accept-Language': 'en', 'User-Agent': 'HavenTo/1.0' } }
       );
       if (res.ok) {
         const data = await res.json();
-        const city =
-          data.address?.city ||
-          data.address?.town ||
-          data.address?.village ||
-          data.address?.suburb ||
-          data.address?.county ||
-          '';
-        const state = data.address?.state || '';
-        const country = data.address?.country || '';
-        const parts = [city, state, country].filter(Boolean);
+        const addr = data.address || {};
+
+        // Build from most specific → least specific
+        const street     = addr.road || addr.pedestrian || addr.footway || '';
+        const micro      = addr.neighbourhood || addr.hamlet || addr.isolated_dwelling || '';
+        const village    = addr.village || addr.suburb || addr.quarter || '';
+        const town       = addr.town || addr.city_district || '';
+        const city       = addr.city || addr.municipality || '';
+        const district   = addr.state_district || addr.county || '';
+        const state      = addr.state || '';
+
+        // Prefer: "hamlet, village/town, district, state"
+        // If no village-level data, fall back gracefully
+        const localPart  = micro || village || street || '';
+        const cityPart   = town || city || '';
+        const parts      = [localPart, cityPart || district, state].filter(Boolean);
+
         if (parts.length > 0) return parts.join(', ');
-        if (data.display_name) return data.display_name.split(',').slice(0, 3).join(', ');
+        if (data.display_name) return data.display_name.split(',').slice(0, 4).join(', ').trim();
       }
     } catch (e) {
       console.warn('Reverse geocode error:', e);
     }
-    return `Location (${lat}, ${lng})`;
+    // Always fall back to showing coordinates so user knows location was captured
+    return `Near ${Number(lat).toFixed(4)}°N, ${Number(lng).toFixed(4)}°E`;
   };
 
   // Helper to move marker and fly to coordinates
@@ -108,20 +143,22 @@ const GoogleMapPickerModal = ({
     }
   };
 
-  // Detect generic country centroid (Hirdi / Maharashtra centroid from desktop fallback)
+  // Only reject the exact India geographic centroid OR truly terrible accuracy (>50 km).
+  // Do NOT block valid UP / North India coordinates which are far from the centroid.
   const isGenericCentroid = (lat, lng, accuracy) => {
     const latNum = Number(lat);
     const lngNum = Number(lng);
     if (isNaN(latNum) || isNaN(lngNum)) return false;
-    const isNearHirdi =
-      Math.abs(latNum - 20.5938) < 0.35 &&
-      Math.abs(lngNum - 78.9629) < 0.35;
-    const isLowAccuracy = accuracy && accuracy > 10000;
-    return isNearHirdi || isLowAccuracy;
+    const isExactIndiaCentroid =
+      Math.abs(latNum - 20.5938) < 0.10 &&
+      Math.abs(lngNum - 78.9629) < 0.10;
+    // Only reject if it's the exact centroid OR accuracy is worse than 50 km
+    return isExactIndiaCentroid || (accuracy && accuracy > 50000);
   };
+  // Multi-tier IP location fallback with reverse-geocoded label
+  const fetchIpLocation = async (reason = '') => {
+    if (reason) setStatusMsg(`📡 ${reason}…`);
 
-  // Multi-tier IP location fallback
-  const fetchIpLocation = async () => {
     try {
       const res = await fetch('https://ipwho.is/');
       if (res.ok) {
@@ -130,7 +167,9 @@ const GoogleMapPickerModal = ({
           const lat = Number(data.latitude).toFixed(6);
           const lng = Number(data.longitude).toFixed(6);
           if (!isGenericCentroid(lat, lng, 0)) {
+            const betterName = await reverseGeocode(lat, lng);
             const placeName =
+              betterName ||
               [data.city, data.region, data.country].filter(Boolean).join(', ') ||
               `Location (${lat}, ${lng})`;
             setLatitude(lat);
@@ -139,7 +178,8 @@ const GoogleMapPickerModal = ({
             setSearchQuery(placeName);
             setGeoError('');
             setLocating(false);
-            updateMapPosition(lat, lng, 15);
+            setStatusMsg('');
+            updateMapPosition(lat, lng, 13);
             return true;
           }
         }
@@ -157,7 +197,9 @@ const GoogleMapPickerModal = ({
           if (ipLat && ipLng && !isGenericCentroid(ipLat, ipLng, 0)) {
             const lat = Number(ipLat).toFixed(6);
             const lng = Number(ipLng).toFixed(6);
+            const betterName = await reverseGeocode(lat, lng);
             const placeName =
+              betterName ||
               [data2.city, data2.region, data2.country].filter(Boolean).join(', ') ||
               `Location (${lat}, ${lng})`;
             setLatitude(lat);
@@ -166,7 +208,8 @@ const GoogleMapPickerModal = ({
             setSearchQuery(placeName);
             setGeoError('');
             setLocating(false);
-            updateMapPosition(lat, lng, 15);
+            setStatusMsg('');
+            updateMapPosition(lat, lng, 13);
             return true;
           }
         }
@@ -175,42 +218,45 @@ const GoogleMapPickerModal = ({
       console.warn('ipinfo fallback error:', e);
     }
 
-    setGeoError('Could not auto-detect location. Please search your address or click on the map.');
+    setGeoError('Could not detect your location. Type your address in the search box or click on the map.');
     setLocating(false);
+    setStatusMsg('');
     return false;
   };
 
-  // Handle GPS button click
+  // GPS button: try hardware GPS first, fall back to IP after 12s
   const handleUseCurrentLocation = () => {
     setLocating(true);
     setGeoError('');
+    setStatusMsg('🛰 Getting your GPS location…');
 
     if (!navigator.geolocation) {
-      fetchIpLocation();
+      fetchIpLocation('GPS not available, using network location');
       return;
     }
 
     let resolved = false;
-    // On phones with satellite GPS, locking can take 5-8 seconds; allow 9.5 seconds before IP fallback
     const fallbackTimer = setTimeout(() => {
       if (!resolved) {
         resolved = true;
-        console.warn('Satellite GPS timed out, using network IP fallback');
-        fetchIpLocation();
+        console.warn('GPS timed out → IP fallback');
+        fetchIpLocation('GPS timed out, using network location');
       }
-    }, 9500);
+    }, 12000);
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         if (resolved) return;
         const rawLat = pos.coords.latitude;
         const rawLng = pos.coords.longitude;
-        const accuracy = pos.coords.accuracy;
+        const accuracy = pos.coords.accuracy; // metres
+
+        console.log(`GPS: lat=${rawLat}, lng=${rawLng}, accuracy=${accuracy}m`);
 
         if (isGenericCentroid(rawLat, rawLng, accuracy)) {
           clearTimeout(fallbackTimer);
           resolved = true;
-          await fetchIpLocation();
+          await fetchIpLocation('GPS gave inaccurate result, using network location');
           return;
         }
 
@@ -221,24 +267,29 @@ const GoogleMapPickerModal = ({
         const lng = rawLng.toFixed(6);
         setLatitude(lat);
         setLongitude(lng);
+        setStatusMsg('📍 Pinpointing your area…');
 
         const placeName = await reverseGeocode(lat, lng);
         setSelectedLocation(placeName);
         setSearchQuery(placeName);
         setLocating(false);
-        updateMapPosition(lat, lng, 16);
+        setStatusMsg('');
+        // Zoom: <200m accuracy → zoom 17, <5km → zoom 15, else zoom 13
+        const zoom = accuracy < 200 ? 17 : accuracy < 5000 ? 15 : 13;
+        updateMapPosition(lat, lng, zoom);
       },
-      () => {
+      (err) => {
         if (resolved) return;
         resolved = true;
         clearTimeout(fallbackTimer);
-        fetchIpLocation();
+        console.warn('GPS error:', err.message);
+        fetchIpLocation('GPS denied, using network location');
       },
-      { timeout: 9000, enableHighAccuracy: true, maximumAge: 60000 }
+      { timeout: 11000, enableHighAccuracy: true, maximumAge: 0 }
     );
   };
 
-  // Handle address search
+  // Address search with multi-attempt and India bias
   const handleSearchSubmit = async (e) => {
     if (e) e.preventDefault();
     const q = searchQuery.trim();
@@ -247,32 +298,23 @@ const GoogleMapPickerModal = ({
     setSearching(true);
     setGeoError('');
 
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`,
-        { headers: { 'Accept-Language': 'en' } }
-      );
-      if (res.ok) {
-        const results = await res.json();
-        if (results && results.length > 0) {
-          const first = results[0];
-          const lat = Number(first.lat).toFixed(6);
-          const lng = Number(first.lon).toFixed(6);
-          setLatitude(lat);
-          setLongitude(lng);
-          setSelectedLocation(first.display_name || q);
-          setSearchQuery(first.display_name || q);
-          setSearching(false);
-          updateMapPosition(lat, lng, 16);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('Search error:', err);
-    }
+    const result = await searchNominatim(q);
 
-    setSelectedLocation(q);
-    setSearching(false);
+    if (result) {
+      const lat = Number(result.lat).toFixed(6);
+      const lng = Number(result.lon).toFixed(6);
+      const betterName = await reverseGeocode(lat, lng);
+      setLatitude(lat);
+      setLongitude(lng);
+      setSelectedLocation(betterName || result.display_name || q);
+      setSearchQuery(betterName || result.display_name || q);
+      setSearching(false);
+      updateMapPosition(lat, lng, 15);
+    } else {
+      setGeoError(`"${q}" was not found. Try a nearby city (e.g. "Bijnor") or click on the map to pin manually.`);
+      setSelectedLocation(q);
+      setSearching(false);
+    }
   };
 
   // Handle popular destination chip click
@@ -477,9 +519,22 @@ const GoogleMapPickerModal = ({
             </button>
           </form>
 
-          {geoError && (
-            <p className="text-xs text-rose-600 font-medium bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-100">{geoError}</p>
+          {statusMsg && (
+            <p className="text-xs text-blue-600 font-medium bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1.5">
+              <span>{statusMsg}</span>
+            </p>
           )}
+
+          {geoError && (
+            <p className="text-xs text-amber-700 font-medium bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
+              ⚠️ {geoError}
+            </p>
+          )}
+
+          <p className="text-[10px] text-gray-400 leading-relaxed">
+            💡 <strong>Tip:</strong> On desktop/laptop, GPS uses your internet connection and may show a nearby city instead of your exact house.
+            For precise location, <strong>type your village/colony name</strong> in the search box, then <strong>drag the 📍 pin</strong> to your exact house.
+          </p>
 
           {/* Quick Suggestions & Layer Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2">
