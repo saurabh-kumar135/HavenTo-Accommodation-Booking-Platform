@@ -12,6 +12,7 @@ import { useToast } from '../../context/ToastContext';
 import Navbar from '../../components/Navbar';
 import { getImageUrl } from '../../config/api';
 import BookingModal from '../../components/BookingModal';
+import GoogleMapViewer from '../../components/GoogleMapViewer';
 
 const HomeDetail = () => {
   const { homeId } = useParams();
@@ -421,6 +422,27 @@ const HomeDetail = () => {
             <div className="border-b pb-6">
               <h3 className="text-xl font-semibold mb-3">Description</h3>
               <p className="text-gray-600 leading-relaxed">{home.description}</p>
+            </div>
+
+            {/* Where you'll be - Google Maps Location */}
+            <div className="pt-2">
+              <h3 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2">
+                <span>Where you'll be</span>
+              </h3>
+              <p className="text-sm text-gray-600 mb-4 flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-rose-500 shrink-0">
+                  <path fillRule="evenodd" d="m9.69 18.933.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 0 0 .281-.14c.186-.096.446-.24.757-.433 1.244-.77 2.87-2.025 4.312-3.811 2.055-2.547 3.316-5.467 3.316-8.541C18.684 2.686 14.802 0 10 0 5.198 0 1.316 2.686 1.316 6c0 3.074 1.261 5.994 3.316 8.541 1.442 1.786 3.068 3.041 4.312 3.811.311.193.571.337.757.433.092.048.188.096.281.14l.018.008.006.003ZM10 8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" clipRule="evenodd" />
+                </svg>
+                <span>{home.location}</span>
+              </p>
+
+              <GoogleMapViewer
+                location={home.location}
+                latitude={home.latitude}
+                longitude={home.longitude}
+                houseName={home.houseName}
+                height="360px"
+              />
             </div>
           </div>
           

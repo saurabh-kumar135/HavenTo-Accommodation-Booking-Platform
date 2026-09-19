@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { addHome, editHome, getEditHome, predictDynamicPrice } from '../../services/api';
 import Navbar from '../../components/Navbar';
 import ErrorAlert from '../../components/ErrorAlert';
+import GoogleMapPickerModal from '../../components/GoogleMapPickerModal';
 
 const AddEditHome = () => {
   const { homeId } = useParams();
@@ -13,12 +14,15 @@ const AddEditHome = () => {
     houseName: '',
     price: '',
     location: '',
+    latitude: '',
+    longitude: '',
     rating: '',
     description: '',
   });
   const [photos, setPhotos] = useState([]); 
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
   const [mlRecommendation, setMlRecommendation] = useState(null);
   const [loadingMl, setLoadingMl] = useState(false);
 
@@ -65,6 +69,8 @@ const AddEditHome = () => {
           houseName: home.houseName || '',
           price: home.price || '',
           location: home.location || '',
+          latitude: home.latitude != null ? String(home.latitude) : '',
+          longitude: home.longitude != null ? String(home.longitude) : '',
           rating: home.rating || '',
           description: home.description || '',
         });
@@ -96,6 +102,8 @@ const AddEditHome = () => {
     data.append('houseName', formData.houseName);
     data.append('price', formData.price);
     data.append('location', formData.location);
+    if (formData.latitude) data.append('latitude', formData.latitude);
+    if (formData.longitude) data.append('longitude', formData.longitude);
     data.append('rating', formData.rating);
     data.append('description', formData.description);
 
@@ -193,22 +201,55 @@ const AddEditHome = () => {
               </div>
             )}
           </div>
-          <input
-            type="text"
-            name="location"
-            value={formData.location}
-            onChange={handleChange}
-            placeholder="Location"
-            className="w-full px-4 py-2 mb-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
-            required
-          />
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Property Location
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                name="location"
+                value={formData.location}
+                onChange={handleChange}
+                placeholder="Enter city or address (e.g. Mumbai, Goa)"
+                className="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setIsMapPickerOpen(true)}
+                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-md transition flex items-center gap-1.5 shrink-0"
+                title="Choose exact spot on Google Maps"
+              >
+                <svg className="w-4 h-4 fill-current text-rose-500" viewBox="0 0 24 24">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                <span>Google Maps</span>
+              </button>
+            </div>
+            {formData.latitude && formData.longitude && (
+              <div className="mt-1.5 flex items-center justify-between text-[11px] text-gray-500 bg-gray-50 px-2.5 py-1 rounded border border-gray-200">
+                <span className="font-mono">
+                  📍 Coordinates: {Number(formData.latitude).toFixed(4)}, {Number(formData.longitude).toFixed(4)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsMapPickerOpen(true)}
+                  className="text-rose-600 hover:underline font-semibold"
+                >
+                  Adjust Pin
+                </button>
+              </div>
+            )}
+          </div>
+
           <input
             type="text"
             name="rating"
             value={formData.rating}
             onChange={handleChange}
-            placeholder="Rating"
-            className="w-full px-4 py-2 mb-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+            placeholder="Rating (e.g. 4.8)"
+            className="w-full px-4 py-2 mb-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
             required
           />
           <input
@@ -217,7 +258,7 @@ const AddEditHome = () => {
             accept="image/jpg, image/jpeg, image/png"
             onChange={handleFileChange}
             multiple
-            className="w-full px-4 py-2 mb-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-4 py-2 mb-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
           />
           <p className="text-sm text-gray-500 mb-4">You can select up to 5 images</p>
           <textarea
@@ -225,16 +266,32 @@ const AddEditHome = () => {
             value={formData.description}
             onChange={handleChange}
             placeholder="Describe your home"
-            className="w-full px-4 py-2 mb-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-4 py-2 mb-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
           />
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-red-500 text-white py-2 rounded-md hover:bg-red-600 transition duration-300"
+            className="w-full bg-[#A67C52] text-white py-3 rounded-xl hover:bg-[#8B6F47] font-semibold transition duration-300 shadow-md"
           >
             {loading ? 'Processing...' : (isEditing ? 'Update Home' : 'Add Home')}
           </button>
         </form>
+
+        <GoogleMapPickerModal
+          isOpen={isMapPickerOpen}
+          onClose={() => setIsMapPickerOpen(false)}
+          initialLocation={formData.location}
+          initialLatitude={formData.latitude}
+          initialLongitude={formData.longitude}
+          onSelectLocation={({ location, latitude, longitude }) => {
+            setFormData(prev => ({
+              ...prev,
+              location,
+              latitude: latitude != null ? String(latitude) : '',
+              longitude: longitude != null ? String(longitude) : '',
+            }));
+          }}
+        />
       </main>
     </>
   );
