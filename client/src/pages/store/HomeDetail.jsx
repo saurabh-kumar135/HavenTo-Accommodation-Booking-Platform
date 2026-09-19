@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getHomeDetails, addToFavourite, createBooking, getHomePricingAnalysis } from '../../services/api';
+import {
+  getHomeDetails,
+  addToFavourite,
+  removeFromFavourite,
+  createBooking,
+  getHomePricingAnalysis,
+} from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import Navbar from '../../components/Navbar';
 import { getImageUrl } from '../../config/api';
 import BookingModal from '../../components/BookingModal';
@@ -14,8 +21,13 @@ const HomeDetail = () => {
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0); 
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user, updateFavourites } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
+
+  const isFav = Boolean(
+    user?.favourites?.some((fav) => String(fav) === String(homeId))
+  );
 
   useEffect(() => {
     fetchHomeDetails();
@@ -42,18 +54,63 @@ const HomeDetail = () => {
     }
   };
 
-  const handleAddFavourite = async () => {
-    try {
-      await addToFavourite(homeId);
-      navigate('/favourites');
-    } catch (error) {
-      console.error('Error adding to favourites:', error);
+  const handleToggleFavourite = async () => {
+    if (!isLoggedIn) {
+      showToast('Please login to save favourites', 'info');
+      navigate('/login');
+      return;
+    }
+    if (isFav) {
+      try {
+        const response = await removeFromFavourite(homeId);
+        if (response.data.success) {
+          if (response.data.favourites) {
+            updateFavourites(response.data.favourites);
+          } else if (user?.favourites) {
+            updateFavourites(user.favourites.filter((f) => String(f) !== String(homeId)));
+          }
+          showToast('Removed from favourites', 'info');
+        }
+      } catch (error) {
+        console.error('Error removing from favourites:', error);
+        showToast(
+          error.response?.data?.detail ||
+          error.response?.data?.message ||
+          'Failed to remove favourite',
+          'error'
+        );
+      }
+    } else {
+      try {
+        const response = await addToFavourite(homeId);
+        if (response.data.success) {
+          if (response.data.favourites) {
+            updateFavourites(response.data.favourites);
+          } else if (user?.favourites) {
+            updateFavourites([...user.favourites, String(homeId)]);
+          }
+          showToast('Saved to your favourites! ❤️', 'success');
+        }
+      } catch (error) {
+        console.error('Error adding to favourites:', error);
+        if (error.response?.status === 401) {
+          showToast('Please login to save favourites', 'info');
+          navigate('/login');
+        } else {
+          showToast(
+            error.response?.data?.detail ||
+            error.response?.data?.message ||
+            'Failed to add to favourites',
+            'error'
+          );
+        }
+      }
     }
   };
 
   const handleOpenBookingModal = () => {
     if (!isLoggedIn) {
-      alert('Please login to book a home');
+      showToast('Please login to book a home', 'info');
       navigate('/login');
       return;
     }
@@ -65,12 +122,16 @@ const HomeDetail = () => {
       const res = await createBooking(bookingData);
       if (res.data.success) {
         setIsBookingModalOpen(false);
-        alert('Booking confirmed successfully!');
+        showToast('Booking confirmed successfully! 🎉', 'success');
         navigate('/bookings');
       }
     } catch (error) {
       console.error('Error booking home:', error);
-      alert(error.response?.data?.message || 'Failed to book home. Please try again.');
+      const msg =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        'Failed to book home. Please try again.';
+      showToast(msg, 'error');
     }
   };
 
@@ -189,9 +250,36 @@ const HomeDetail = () => {
     <>
       <Navbar currentPage="Home" />
       <main className="container mx-auto px-4 mt-8 mb-16 max-w-7xl">
-        <h2 className="text-3xl font-bold text-gray-800 mb-6">
-          {home.houseName}
-        </h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-3xl font-bold text-gray-800">
+            {home.houseName}
+          </h2>
+          <button
+            type="button"
+            onClick={handleToggleFavourite}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition shadow-xs ${
+              isFav
+                ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
+                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill={isFav ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              strokeWidth={isFav ? 0 : 2}
+              className={`w-5 h-5 ${isFav ? 'text-rose-500' : ''}`}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+              />
+            </svg>
+            <span>{isFav ? 'Saved' : 'Save'}</span>
+          </button>
+        </div>
         
         {}
         <div className="relative mb-8">
@@ -382,22 +470,50 @@ const HomeDetail = () => {
                     </button>
 
                     <button 
-                      onClick={handleAddFavourite}
-                      className="w-full bg-green-500 text-white px-6 py-3 rounded-xl hover:bg-green-600 transition font-semibold flex items-center justify-center gap-2"
+                      type="button"
+                      onClick={handleToggleFavourite}
+                      className={`w-full px-6 py-3 rounded-xl transition font-semibold flex items-center justify-center gap-2 border shadow-xs ${
+                        isFav
+                          ? 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-200'
+                          : 'bg-white hover:bg-rose-50 text-gray-700 hover:text-rose-600 border-gray-200'
+                      }`}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill={isFav ? 'currentColor' : 'none'}
+                        stroke="currentColor"
+                        strokeWidth={isFav ? 0 : 2}
+                        className={`w-5 h-5 ${isFav ? 'text-rose-500' : ''}`}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+                        />
                       </svg>
-                      Add to Favourite
+                      {isFav ? 'Saved to Favourites' : 'Save to Favourites'}
                     </button>
                   </>
                 ) : (
-                  <button 
-                    onClick={() => navigate('/login')}
-                    className="w-full bg-[#A67C52] text-white px-6 py-3.5 rounded-xl hover:bg-[#8B6F47] transition font-semibold flex items-center justify-center gap-2"
-                  >
-                    Login to Book
-                  </button>
+                  <>
+                    <button 
+                      onClick={() => navigate('/login')}
+                      className="w-full bg-[#A67C52] text-white px-6 py-3.5 rounded-xl hover:bg-[#8B6F47] transition font-semibold flex items-center justify-center gap-2 shadow-md"
+                    >
+                      Login to Book
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={handleToggleFavourite}
+                      className="w-full bg-white hover:bg-rose-50 text-gray-700 hover:text-rose-600 px-6 py-3 rounded-xl transition font-semibold flex items-center justify-center gap-2 border border-gray-200"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-gray-400">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                      </svg>
+                      Save to Favourites
+                    </button>
+                  </>
                 )}
               </div>
             </div>

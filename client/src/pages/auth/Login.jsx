@@ -1,21 +1,29 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import Navbar from '../../components/Navbar';
 import ErrorAlert from '../../components/ErrorAlert';
 
 const Login = () => {
-  const [email, setEmail] = useState('');
+  const location = useLocation();
+  const [email, setEmail] = useState(location.state?.email || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (location.state?.email) {
+      setEmail(location.state.email);
+    }
+  }, [location.state]);
+
   const handleSubmit = async (e) => {
-    
     e.preventDefault();
     setLoading(true);
     setErrors([]);
@@ -23,6 +31,7 @@ const Login = () => {
     const result = await login(email, password);
     
     if (result.success) {
+      showToast('Logged in successfully! Welcome back 👋', 'success');
       navigate('/');
     } else {
       setErrors(result.errors || ['Login failed']);

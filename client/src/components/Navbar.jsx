@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const Navbar = ({ currentPage }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, isLoggedIn, logout } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     await logout();
+    showToast('You have been logged out safely. See you soon!', 'info');
     navigate('/login');
   };
 

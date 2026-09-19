@@ -6,6 +6,8 @@ const BookingModal = ({ isOpen, onClose, home, onConfirm }) => {
   const [guests, setGuests] = useState(1);
   const [totalNights, setTotalNights] = useState(1);
   const [totalPrice, setTotalPrice] = useState(home?.price || 0);
+  const [dateError, setDateError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Set initial default dates (tomorrow and 3 days later)
   useEffect(() => {
@@ -21,6 +23,8 @@ const BookingModal = ({ isOpen, onClose, home, onConfirm }) => {
       setCheckIn(toDateInputString(tomorrow));
       setCheckOut(toDateInputString(dayAfter));
       setGuests(1);
+      setDateError('');
+      setIsSubmitting(false);
     }
   }, [isOpen, home]);
 
@@ -34,27 +38,36 @@ const BookingModal = ({ isOpen, onClose, home, onConfirm }) => {
       if (nights > 0) {
         setTotalNights(nights);
         setTotalPrice(nights * home.price);
+        setDateError('');
       } else {
         setTotalNights(0);
         setTotalPrice(0);
+        setDateError('Check-out date must be after check-in date');
       }
     }
   }, [checkIn, checkOut, home]);
 
   if (!isOpen || !home) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (totalNights <= 0) {
-      alert('Please select a check-out date that comes after the check-in date.');
+      setDateError('Please select a check-out date that comes after the check-in date.');
       return;
     }
-    onConfirm({
-      homeId: home._id,
-      checkIn,
-      checkOut,
-      guests: Number(guests),
-    });
+    setDateError('');
+    setIsSubmitting(true);
+    try {
+      await onConfirm({
+        homeId: home._id || home.id,
+        checkIn,
+        checkOut,
+        guests: Number(guests),
+        totalPrice: Number(totalPrice),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -128,6 +141,15 @@ const BookingModal = ({ isOpen, onClose, home, onConfirm }) => {
             />
           </div>
 
+          {dateError && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0 text-red-500">
+                <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
+              </svg>
+              <span>{dateError}</span>
+            </div>
+          )}
+
           {/* Pricing Calculation Summary */}
           <div className="bg-gray-50 p-4 rounded-xl space-y-2 border border-gray-100 text-sm">
             <div className="flex justify-between text-gray-600">
@@ -149,16 +171,27 @@ const BookingModal = ({ isOpen, onClose, home, onConfirm }) => {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 px-4 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition"
+              disabled={isSubmitting}
+              className="flex-1 py-3 px-4 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={totalNights <= 0}
-              className="flex-1 py-3 px-4 bg-[#A67C52] hover:bg-[#8B6F47] disabled:opacity-50 text-white rounded-xl font-semibold shadow-md transition"
+              disabled={totalNights <= 0 || isSubmitting}
+              className="flex-1 py-3 px-4 bg-[#A67C52] hover:bg-[#8B6F47] disabled:opacity-50 text-white rounded-xl font-semibold shadow-md transition flex items-center justify-center gap-2"
             >
-              Confirm Booking
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                  </svg>
+                  Confirming...
+                </>
+              ) : (
+                'Confirm Booking'
+              )}
             </button>
           </div>
         </form>

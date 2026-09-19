@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import Login from './pages/auth/Login';
@@ -26,70 +27,72 @@ import './index.css';
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <div className="min-h-screen bg-gray-100">
-          <Routes>
-            {}
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/verify-email" element={<VerifyEmail />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password/:token" element={<ResetPassword />} />
-            <Route path="/homes" element={<HomeList />} />
-            <Route path="/homes/:homeId" element={<HomeDetail />} />
-            
-            {}
-            <Route path="/favourites" element={
-              <ProtectedRoute>
-                <FavouriteList />
-              </ProtectedRoute>
-            } />
-            <Route path="/bookings" element={
-              <ProtectedRoute>
-                <Bookings />
-              </ProtectedRoute>
-            } />
-            
-            {}
-            <Route path="/host/add-home" element={
-              <ProtectedRoute>
-                <AddEditHome />
-              </ProtectedRoute>
-            } />
-            <Route path="/host/edit-home/:homeId" element={
-              <ProtectedRoute>
-                <AddEditHome />
-              </ProtectedRoute>
-            } />
-            <Route path="/host/host-home-list" element={
-              <ProtectedRoute>
-                <HostHomeList />
-              </ProtectedRoute>
-            } />
-            <Route path="/host/pricing-intelligence" element={
-              <ProtectedRoute>
-                <PricingIntelligence />
-              </ProtectedRoute>
-            } />
-            <Route path="/pricing-intelligence" element={
-              <ProtectedRoute>
-                <PricingIntelligence />
-              </ProtectedRoute>
-            } />
-            <Route path="/host/analytics" element={
-              <ProtectedRoute>
-                <PricingIntelligence />
-              </ProtectedRoute>
-            } />
-            
-            {}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          {/* AI Chat Widget - floating on all pages */}
-          <AIChatWidget />
-        </div>
-      </Router>
+      <ToastProvider>
+        <Router>
+          <div className="min-h-screen bg-gray-100">
+            <Routes>
+              {}
+              <Route path="/" element={<Index />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password/:token" element={<ResetPassword />} />
+              <Route path="/homes" element={<HomeList />} />
+              <Route path="/homes/:homeId" element={<HomeDetail />} />
+              
+              {}
+              <Route path="/favourites" element={
+                <ProtectedRoute>
+                  <FavouriteList />
+                </ProtectedRoute>
+              } />
+              <Route path="/bookings" element={
+                <ProtectedRoute>
+                  <Bookings />
+                </ProtectedRoute>
+              } />
+              
+              {}
+              <Route path="/host/add-home" element={
+                <ProtectedRoute>
+                  <AddEditHome />
+                </ProtectedRoute>
+              } />
+              <Route path="/host/edit-home/:homeId" element={
+                <ProtectedRoute>
+                  <AddEditHome />
+                </ProtectedRoute>
+              } />
+              <Route path="/host/host-home-list" element={
+                <ProtectedRoute>
+                  <HostHomeList />
+                </ProtectedRoute>
+              } />
+              <Route path="/host/pricing-intelligence" element={
+                <ProtectedRoute>
+                  <PricingIntelligence />
+                </ProtectedRoute>
+              } />
+              <Route path="/pricing-intelligence" element={
+                <ProtectedRoute>
+                  <PricingIntelligence />
+                </ProtectedRoute>
+              } />
+              <Route path="/host/analytics" element={
+                <ProtectedRoute>
+                  <PricingIntelligence />
+                </ProtectedRoute>
+              } />
+              
+              {}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            {/* AI Chat Widget - floating on all pages */}
+            <AIChatWidget />
+          </div>
+        </Router>
+      </ToastProvider>
     </AuthProvider>
   );
 }

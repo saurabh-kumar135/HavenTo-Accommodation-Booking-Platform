@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getHomes, addToFavourite, createBooking } from '../../services/api';
+import { getHomes, addToFavourite, removeFromFavourite, createBooking } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import Navbar from '../../components/Navbar';
 import HomeCard from '../../components/HomeCard';
 import BookingModal from '../../components/BookingModal';
@@ -10,7 +11,8 @@ const HomeList = () => {
   const [homes, setHomes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedHomeForBooking, setSelectedHomeForBooking] = useState(null);
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user, updateFavourites } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,24 +33,66 @@ const HomeList = () => {
   };
 
   const handleAddFavourite = async (homeId) => {
+    if (!isLoggedIn) {
+      showToast('Please login to save favourites', 'info');
+      navigate('/login');
+      return;
+    }
     try {
-      await addToFavourite(homeId);
-      navigate('/favourites'); 
+      const response = await addToFavourite(homeId);
+      if (response.data.success) {
+        if (response.data.favourites) {
+          updateFavourites(response.data.favourites);
+        } else if (user?.favourites) {
+          updateFavourites([...user.favourites, String(homeId)]);
+        }
+        showToast('Saved to your favourites! ❤️', 'success');
+      }
     } catch (error) {
       console.error('Error adding to favourites:', error);
       if (error.response?.status === 401) {
+        showToast('Please login to save favourites', 'info');
         navigate('/login');
+      } else {
+        showToast(
+          error.response?.data?.detail ||
+          error.response?.data?.message ||
+          'Failed to add to favourites',
+          'error'
+        );
       }
+    }
+  };
+
+  const handleRemoveFavourite = async (homeId) => {
+    try {
+      const response = await removeFromFavourite(homeId);
+      if (response.data.success) {
+        if (response.data.favourites) {
+          updateFavourites(response.data.favourites);
+        } else if (user?.favourites) {
+          updateFavourites(user.favourites.filter((f) => String(f) !== String(homeId)));
+        }
+        showToast('Removed from favourites', 'info');
+      }
+    } catch (error) {
+      console.error('Error removing from favourites:', error);
+      showToast(
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        'Failed to remove favourite',
+        'error'
+      );
     }
   };
 
   const handleOpenBookingModal = (homeId) => {
     if (!isLoggedIn) {
-      alert('Please login to book a home');
+      showToast('Please login to book a home', 'info');
       navigate('/login');
       return;
     }
-    const home = homes.find(h => h._id === homeId);
+    const home = homes.find((h) => (h._id || h.id) === homeId);
     if (home) {
       setSelectedHomeForBooking(home);
     }
@@ -59,12 +103,16 @@ const HomeList = () => {
       const res = await createBooking(bookingData);
       if (res.data.success) {
         setSelectedHomeForBooking(null);
-        alert('Booking confirmed successfully!');
+        showToast('Booking confirmed successfully! 🎉', 'success');
         navigate('/bookings');
       }
     } catch (error) {
       console.error('Error booking home:', error);
-      alert(error.response?.data?.message || 'Failed to book home. Please try again.');
+      const msg =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        'Failed to book home. Please try again.';
+      showToast(msg, 'error');
     }
   };
 
@@ -79,15 +127,16 @@ const HomeList = () => {
           <div className="text-center">Loading...</div>
         ) : (
           <div className="flex flex-wrap justify-center gap-6">
-            {homes.map(home => (
+            {homes.map((home) => (
               <HomeCard 
-                key={home._id} 
+                key={home._id || home.id} 
                 home={home}
                 showDetails={true}
-                showBook={isLoggedIn}
-                showFavourite={isLoggedIn}
+                showBook={true}
+                showFavourite={true}
                 onBook={handleOpenBookingModal}
                 onAddFavourite={handleAddFavourite}
+                onRemoveFavourite={handleRemoveFavourite}
               />
             ))}
           </div>

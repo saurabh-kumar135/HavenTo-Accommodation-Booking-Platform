@@ -4,6 +4,7 @@ import { getBookings, cancelBooking, deleteBooking } from '../../services/api';
 import Navbar from '../../components/Navbar';
 import CancelBookingModal from '../../components/CancelBookingModal';
 import { getImageUrl } from '../../config/api';
+import { useToast } from '../../context/ToastContext';
 
 const Bookings = () => {
   const [bookings, setBookings] = useState([]);
@@ -12,6 +13,7 @@ const Bookings = () => {
   const [isCancelling, setIsCancelling] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
   const [activeTab, setActiveTab] = useState('active'); // 'active' | 'cancelled' | 'all'
+  const { showToast } = useToast();
 
   useEffect(() => {
     fetchBookings();
@@ -57,27 +59,24 @@ const Bookings = () => {
       }
     } catch (error) {
       console.error('Error cancelling booking:', error);
-      alert(error.response?.data?.message || 'Failed to cancel booking. Please try again.');
+      const msg = error.response?.data?.detail || error.response?.data?.message || 'Failed to cancel booking. Please try again.';
+      showToast(msg, 'error');
     } finally {
       setIsCancelling(false);
     }
   };
 
   const handleDeleteBooking = async (bookingId) => {
-    if (!window.confirm('Remove this booking permanently from your list?')) return;
     try {
       const res = await deleteBooking(bookingId);
       if (res.data.success) {
         setBookings((prev) => prev.filter((b) => b._id !== bookingId));
-        setToastMessage({
-          type: 'success',
-          text: 'Booking record removed from your account.',
-        });
-        setTimeout(() => setToastMessage(null), 4000);
+        showToast('Booking record removed from your account.', 'info');
       }
     } catch (error) {
       console.error('Error deleting booking:', error);
-      alert(error.response?.data?.message || 'Failed to remove booking.');
+      const msg = error.response?.data?.detail || error.response?.data?.message || 'Failed to remove booking.';
+      showToast(msg, 'error');
     }
   };
 

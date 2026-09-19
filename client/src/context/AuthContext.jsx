@@ -66,8 +66,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateFavourites = (favourites) => {
+    setUser((prev) => (prev ? { ...prev, favourites } : prev));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isLoggedIn, loading, login, logout, checkSessionStatus }}>
+    <AuthContext.Provider value={{ user, setUser, isLoggedIn, loading, login, logout, checkSessionStatus, updateFavourites }}>
       {children}
     </AuthContext.Provider>
   );
