@@ -57,35 +57,132 @@ const GoogleMapPickerModal = ({
     setGeoError('');
   };
 
-  const handleUseCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      setGeoError('Geolocation is not supported by your browser.');
-      return;
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const city =
+          data.address?.city ||
+          data.address?.town ||
+          data.address?.village ||
+          data.address?.suburb ||
+          data.address?.county ||
+          '';
+        const state = data.address?.state || '';
+        const country = data.address?.country || '';
+        const parts = [city, state, country].filter(Boolean);
+        if (parts.length > 0) {
+          return parts.join(', ');
+        }
+        if (data.display_name) {
+          return data.display_name.split(',').slice(0, 3).join(', ');
+        }
+      }
+    } catch (e) {
+      console.warn('Reverse geocode error:', e);
+    }
+    return `Location (${lat}, ${lng})`;
+  };
+
+  const fetchIpLocation = async () => {
+    try {
+      const res = await fetch('https://ipwho.is/');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.latitude && data.longitude) {
+          const lat = Number(data.latitude).toFixed(6);
+          const lng = Number(data.longitude).toFixed(6);
+          const placeName =
+            [data.city, data.region, data.country].filter(Boolean).join(', ') ||
+            `Location (${lat}, ${lng})`;
+          setLatitude(lat);
+          setLongitude(lng);
+          setSelectedLocation(placeName);
+          setSearchQuery(placeName);
+          setGeoError('');
+          setLocating(false);
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn('ipwho.is error, attempting secondary fallback:', e);
     }
 
+    try {
+      const res2 = await fetch('https://ipapi.co/json/');
+      if (res2.ok) {
+        const data2 = await res2.json();
+        if (data2.latitude && data2.longitude) {
+          const lat = Number(data2.latitude).toFixed(6);
+          const lng = Number(data2.longitude).toFixed(6);
+          const placeName =
+            [data2.city, data2.region, data2.country_name].filter(Boolean).join(', ') ||
+            `Location (${lat}, ${lng})`;
+          setLatitude(lat);
+          setLongitude(lng);
+          setSelectedLocation(placeName);
+          setSearchQuery(placeName);
+          setGeoError('');
+          setLocating(false);
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn('ipapi fallback error:', e);
+    }
+
+    setGeoError('Unable to detect location. Please type your city/address above.');
+    setLocating(false);
+    return false;
+  };
+
+  const handleUseCurrentLocation = () => {
     setLocating(true);
     setGeoError('');
 
+    if (!navigator.geolocation) {
+      fetchIpLocation();
+      return;
+    }
+
+    let resolved = false;
+
+    // Safety fallback timer if device GPS driver hangs without responding
+    const fallbackTimer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        fetchIpLocation();
+      }
+    }, 4500);
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(fallbackTimer);
+
         const lat = pos.coords.latitude.toFixed(6);
         const lng = pos.coords.longitude.toFixed(6);
         setLatitude(lat);
         setLongitude(lng);
-        setSelectedLocation(`Location (${lat}, ${lng})`);
-        setSearchQuery(`Location (${lat}, ${lng})`);
+
+        const placeName = await reverseGeocode(lat, lng);
+        setSelectedLocation(placeName);
+        setSearchQuery(placeName);
         setLocating(false);
       },
       (err) => {
-        console.error('Geolocation error:', err);
-        setGeoError(
-          err.code === 1
-            ? 'Location permission denied. Please allow location access or type address.'
-            : 'Unable to retrieve location.'
-        );
-        setLocating(false);
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(fallbackTimer);
+        console.warn('Device GPS unavailable, falling back to IP geolocation:', err?.message);
+        fetchIpLocation();
       },
-      { timeout: 10000, enableHighAccuracy: true }
+      { timeout: 4000, enableHighAccuracy: false, maximumAge: 300000 }
     );
   };
 
