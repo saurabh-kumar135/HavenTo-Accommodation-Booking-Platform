@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: havento_express_api
+    restart: always
+    ports:
+      - "3009:3009"
+    env_file:
+      - .env
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - havento_network
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: havento_react_client
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - havento_network
+
+volumes:
+  uploads_data:
+
+networks:
+  havento_network:
+    driver: bridge

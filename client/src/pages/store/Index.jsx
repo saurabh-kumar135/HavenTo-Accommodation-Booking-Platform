@@ -75,11 +75,9 @@ const Index = () => {
     try {
       const response = await addToFavourite(homeId);
       if (response.data.success) {
-        if (response.data.favourites) {
-          updateFavourites(response.data.favourites);
-        } else if (user?.favourites) {
-          updateFavourites([...user.favourites, String(homeId)]);
-        }
+        const currentFavs = (user?.favourites || []).map((f) => String(f?._id || f));
+        const updatedFavs = response.data.favourites || [...new Set([...currentFavs, String(homeId)])];
+        updateFavourites(updatedFavs);
         showToast('Saved to your favourites! ❤️', 'success');
       }
     } catch (error) {
@@ -102,11 +100,9 @@ const Index = () => {
     try {
       const response = await removeFromFavourite(homeId);
       if (response.data.success) {
-        if (response.data.favourites) {
-          updateFavourites(response.data.favourites);
-        } else if (user?.favourites) {
-          updateFavourites(user.favourites.filter((f) => String(f) !== String(homeId)));
-        }
+        const currentFavs = (user?.favourites || []).map((f) => String(f?._id || f));
+        const updatedFavs = response.data.favourites || currentFavs.filter((f) => f !== String(homeId));
+        updateFavourites(updatedFavs);
         showToast('Removed from favourites', 'info');
       }
     } catch (error) {

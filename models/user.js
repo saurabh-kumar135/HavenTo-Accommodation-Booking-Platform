@@ -67,7 +67,28 @@ const userSchema = mongoose.Schema({
   },
   emailVerificationOTP: String,
   emailVerificationExpires: Date,
-  pushToken: String
+  pushToken: String,
+  hostKyc: {
+    isVerified: {
+      type: Boolean,
+      default: false
+    },
+    documentType: {
+      type: String,
+      enum: ['aadhaar', 'pan', null],
+      default: null
+    },
+    maskedNumber: String,
+    documentHash: String,
+    fullNameAsOnDoc: String,
+    status: {
+      type: String,
+      enum: ['unverified', 'pending', 'verified', 'rejected'],
+      default: 'unverified'
+    },
+    verificationRef: String,
+    verifiedAt: Date
+  }
 });
 
 module.exports = mongoose.model('User', userSchema);

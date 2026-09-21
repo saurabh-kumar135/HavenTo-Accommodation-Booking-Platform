@@ -3,7 +3,7 @@ export JAVA_HOME=/home/saurabh-kumar123/Desktop/Desktop/express/jdk-17.0.19+10
 export ANDROID_HOME=/home/saurabh-kumar123/Desktop/Desktop/express/android-sdk
 export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH
 
-cd /home/saurabh-kumar123/Desktop/Desktop/express/HavenToApp
+cd /home/saurabh-kumar123/Desktop/Desktop/express/HavenTo/HavenToApp
 
 echo "=== STEP 1: Re-bind ADB Reverse Ports ==="
 adb reverse tcp:8081 tcp:8081
@@ -11,10 +11,12 @@ adb reverse tcp:3009 tcp:3009
 adb reverse --list
 
 echo ""
-echo "=== STEP 2: Start Express Backend ==="
+echo "=== STEP 2: Start Python FastAPI Backend ==="
+pkill -f "uvicorn" 2>/dev/null || true
 pkill -f "node app.js" 2>/dev/null || true
-(cd /home/saurabh-kumar123/Desktop/haventocopy/Haventocopyapp && node app.js > /tmp/backend3009.log 2>&1 &)
+(cd /home/saurabh-kumar123/Desktop/Desktop/express/Heaven_Python/backend && python3 -m uvicorn app:app --host 0.0.0.0 --port 3009 > /tmp/fastapi3009.log 2>&1 &)
 sleep 4
+
 
 echo ""
 echo "=== STEP 3: Start Metro Server ==="

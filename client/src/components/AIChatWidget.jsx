@@ -96,8 +96,7 @@ const AIChatWidget = () => {
     }
   };
 
-  if (!isLoggedIn) return null;
-
+  // Render floating chat assistant for all guests and users
   return (
     <>
       {/* Floating Button */}

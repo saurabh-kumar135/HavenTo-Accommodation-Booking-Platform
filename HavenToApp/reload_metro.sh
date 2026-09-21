@@ -3,7 +3,7 @@ export JAVA_HOME=/home/saurabh-kumar123/Desktop/Desktop/express/jdk-17.0.19+10
 export ANDROID_HOME=/home/saurabh-kumar123/Desktop/Desktop/express/android-sdk
 export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH
 
-cd /home/saurabh-kumar123/Desktop/Desktop/express/HavenToApp
+cd /home/saurabh-kumar123/Desktop/Desktop/express/HavenTo/HavenToApp
 
 echo "=== STEP 1: Re-bind ADB reverse ports ==="
 adb reverse tcp:8081 tcp:8081

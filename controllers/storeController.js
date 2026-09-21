@@ -18,8 +18,7 @@ async function resolveUser(req) {
 }
 
 exports.getIndex = (req, res, next) => {
-  console.log("Session Value: ", req.session);
-  Home.find().then((registeredHomes) => {
+  Home.find().populate('hostId', 'firstName lastName hostKyc').then((registeredHomes) => {
     res.json({
       success: true,
       registeredHomes: registeredHomes,
@@ -32,7 +31,7 @@ exports.getIndex = (req, res, next) => {
 };
 
 exports.getHomes = (req, res, next) => {
-  Home.find().then((registeredHomes) => {
+  Home.find().populate('hostId', 'firstName lastName hostKyc').then((registeredHomes) => {
     res.json({
       success: true,
       registeredHomes: registeredHomes,
@@ -351,7 +350,9 @@ exports.postAddToFavourite = async (req, res, next) => {
       });
     }
     
-    if (!user.favourites.includes(homeId)) {
+    const homeIdStr = homeId.toString();
+    const alreadyFav = user.favourites.some((fav) => (fav._id ? fav._id.toString() : fav.toString()) === homeIdStr);
+    if (!alreadyFav) {
       user.favourites.push(homeId);
       await user.save();
     }
@@ -359,6 +360,7 @@ exports.postAddToFavourite = async (req, res, next) => {
     res.json({
       success: true,
       message: "Added to favourites",
+      favourites: user.favourites.map((f) => (f._id ? f._id.toString() : f.toString())),
     });
   } catch (error) {
     console.error('Add to favourites error:', error);
@@ -390,14 +392,14 @@ exports.postRemoveFromFavourite = async (req, res, next) => {
       });
     }
     
-    if (user.favourites.includes(homeId)) {
-      user.favourites = user.favourites.filter(fav => fav != homeId);
-      await user.save();
-    }
+    const homeIdStr = homeId.toString();
+    user.favourites = user.favourites.filter((fav) => (fav._id ? fav._id.toString() : fav.toString()) !== homeIdStr);
+    await user.save();
     
     res.json({
       success: true,
       message: "Removed from favourites",
+      favourites: user.favourites.map((f) => (f._id ? f._id.toString() : f.toString())),
     });
   } catch (error) {
     console.error('Remove from favourites error:', error);
@@ -410,7 +412,7 @@ exports.postRemoveFromFavourite = async (req, res, next) => {
 
 exports.getHomeDetails = (req, res, next) => {
   const homeId = req.params.homeId;
-  Home.findById(homeId).then((home) => {
+  Home.findById(homeId).populate('hostId', 'firstName lastName hostKyc').then((home) => {
     if (!home) {
       console.log("Home not found");
       res.status(404).json({

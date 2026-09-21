@@ -67,4 +67,8 @@ export const getHomePricingAnalysis = (homeId) => api.get(`/api/analytics/pricin
 export const getHostRevenueMetrics = () => api.get('/api/analytics/host/metrics');
 export const getMarketOverview = () => api.get('/api/analytics/market/overview');
 
+// Host KYC Identity Verification (Aadhaar & PAN)
+export const verifyHostKyc = (data) => api.post('/api/host/verify-kyc', data);
+export const getHostKycStatus = () => api.get('/api/host/kyc-status');
+
 export default api;

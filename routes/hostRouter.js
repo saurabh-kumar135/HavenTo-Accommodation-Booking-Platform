@@ -17,5 +17,8 @@ hostRouter.post("/api/host/homes", hostController.postAddHome);
 hostRouter.post("/api/host/homes/edit", hostController.postEditHome);
 hostRouter.get("/api/host/homes/:homeId", hostController.getEditHome);
 hostRouter.post("/api/host/homes/delete/:homeId", hostController.postDeleteHome);
+// KYC Identity Verification
+hostRouter.post("/api/host/verify-kyc", hostController.postVerifyKyc);
+hostRouter.get("/api/host/kyc-status", hostController.getKycStatus);
 
 module.exports = hostRouter;

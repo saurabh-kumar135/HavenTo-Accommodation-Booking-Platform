@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import HostKycModal from './HostKycModal';
 
 const Navbar = ({ currentPage }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isKycModalOpen, setIsKycModalOpen] = useState(false);
   const { user, isLoggedIn, logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -83,6 +85,16 @@ const Navbar = ({ currentPage }) => {
                         Revenue Insights
                       </Link>
                     </li>
+                    <li>
+                      <button
+                        onClick={() => setIsKycModalOpen(true)}
+                        className="hover:bg-[#C4A57B] bg-white/20 py-2 px-3 rounded-lg transition duration-300 flex items-center gap-1.5 text-xs font-semibold border border-white/40 shadow-sm"
+                        title="Verify Aadhaar or PAN to become a verified Host"
+                      >
+                        <span className="text-sm">🇮🇳</span>
+                        <span>Become a Host</span>
+                      </button>
+                    </li>
                   </>
                 ) : (
                   <>
@@ -119,6 +131,24 @@ const Navbar = ({ currentPage }) => {
                         </svg>
                         Add Home
                       </Link>
+                    </li>
+                    <li className="flex items-center ml-1">
+                      {user?.hostKyc?.isVerified ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-full shadow-sm" title={`Verified with ${user.hostKyc.documentType?.toUpperCase()} (${user.hostKyc.maskedNumber})`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM13.707 8.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          Verified Host
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setIsKycModalOpen(true)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-full shadow-sm animate-pulse transition"
+                          title="Verify Aadhaar or PAN to list homes"
+                        >
+                          <span>⚠️ Verify ID (Aadhaar/PAN)</span>
+                        </button>
+                      )}
                     </li>
                   </>
                 )}
@@ -234,6 +264,27 @@ const Navbar = ({ currentPage }) => {
                         Logout
                       </button>
                     </li>
+                    <li className="pt-2">
+                      {user?.userType === 'guest' ? (
+                        <button
+                          onClick={() => { setMobileMenuOpen(false); setIsKycModalOpen(true); }}
+                          className="w-full text-center py-2 px-3 bg-white text-[#8B6F47] font-semibold text-xs rounded-lg shadow"
+                        >
+                          🇮🇳 Become a Host (Verify ID)
+                        </button>
+                      ) : user?.hostKyc?.isVerified ? (
+                        <div className="text-center text-xs text-emerald-100 font-semibold py-1">
+                          🛡️ Verified Host ({user.hostKyc.documentType?.toUpperCase()})
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setMobileMenuOpen(false); setIsKycModalOpen(true); }}
+                          className="w-full text-center py-2 px-3 bg-amber-500 text-white font-semibold text-xs rounded-lg shadow"
+                        >
+                          ⚠️ Complete Host KYC (Aadhaar / PAN)
+                        </button>
+                      )}
+                    </li>
                   </>
                 ) : (
                   <>
@@ -250,6 +301,16 @@ const Navbar = ({ currentPage }) => {
           )}
         </div>
       </nav>
+
+      {/* Host KYC Verification Modal */}
+      <HostKycModal
+        isOpen={isKycModalOpen}
+        onClose={() => setIsKycModalOpen(false)}
+        onSuccess={() => {
+          setIsKycModalOpen(false);
+          showToast('Welcome to HavenTo Hosts! Your account is verified.', 'success');
+        }}
+      />
     </header>
   );
 };

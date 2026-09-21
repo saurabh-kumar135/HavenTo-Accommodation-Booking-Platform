@@ -36,8 +36,9 @@ async function resolveUser(req) {
 }
 
 exports.checkSession = async (req, res, next) => {
-  const user = await resolveUser(req);
-  if (user) {
+  const resolved = await resolveUser(req);
+  if (resolved) {
+    const user = (await User.findById(resolved._id).select('-password').lean()) || resolved;
     res.json({
       success: true,
       isLoggedIn: true,
@@ -47,6 +48,8 @@ exports.checkSession = async (req, res, next) => {
         lastName: user.lastName,
         email: user.email,
         userType: user.userType,
+        favourites: (user.favourites || []).map((f) => (f._id ? f._id.toString() : f.toString())),
+        hostKyc: user.hostKyc || { isVerified: false, status: 'unverified' },
       },
     });
   } else {
@@ -124,11 +127,8 @@ exports.postSignup = [
       });
     }
 
-    bcrypt.hash(password, 12)
-    .then(hashedPassword => {
-      const user = new User({firstName, lastName, email, password: hashedPassword, userType});
-      return user.save();
-    })
+    const user = new User({firstName, lastName, email, password: password, userType});
+    user.save()
     .then(() => {
       res.status(201).json({
         success: true,
@@ -155,7 +155,8 @@ exports.postLogin = async (req, res, next) => {
     });
   }
 
-  const isMatch = await bcrypt.compare(password, user.password);
+  // Support both plain text password and existing bcrypt hashed passwords
+  const isMatch = (user.password === password) || (await bcrypt.compare(password, user.password).catch(() => false));
   if (!isMatch) {
     return res.status(422).json({
       success: false,
@@ -186,6 +187,8 @@ exports.postLogin = async (req, res, next) => {
       lastName: user.lastName,
       email: user.email,
       userType: user.userType,
+      favourites: (user.favourites || []).map((f) => (f._id ? f._id.toString() : f.toString())),
+      hostKyc: user.hostKyc || { isVerified: false, status: 'unverified' },
     },
   });
 }

@@ -16,6 +16,7 @@ import HomeListScreen   from '../screens/store/HomeListScreen';
 import HomeDetailScreen from '../screens/store/HomeDetailScreen';
 import FavouriteScreen  from '../screens/store/FavouriteScreen';
 import BookingsScreen   from '../screens/store/BookingsScreen';
+import AssistantScreen  from '../screens/AssistantScreen';
 import ProfileScreen    from '../screens/ProfileScreen';
 
 // Host Screens
@@ -34,12 +35,14 @@ function MainTabs() {
   const guestIcons = {
     Explore:    ['search', 'search-outline'],
     Favourites: ['heart', 'heart-outline'],
+    Assistant:  ['sparkles', 'sparkles-outline'],
     Bookings:   ['calendar', 'calendar-outline'],
     Profile:    ['person', 'person-outline'],
   };
   const hostIcons = {
     MyProperties: ['home', 'home-outline'],
     AddProperty:  ['add-circle', 'add-circle-outline'],
+    Assistant:    ['sparkles', 'sparkles-outline'],
     Profile:      ['person', 'person-outline'],
   };
   const icons = isHost ? hostIcons : guestIcons;
@@ -61,12 +64,14 @@ function MainTabs() {
         <>
           <Tab.Screen name="MyProperties" component={HostHomeListScreen} options={{ title: 'My Properties' }} />
           <Tab.Screen name="AddProperty"  component={AddEditHomeScreen}  options={{ title: 'Add Property' }} />
+          <Tab.Screen name="Assistant"    component={AssistantScreen}    options={{ title: 'Assistant' }} />
           <Tab.Screen name="Profile"      component={ProfileScreen} />
         </>
       ) : (
         <>
           <Tab.Screen name="Explore"    component={HomeListScreen} />
           <Tab.Screen name="Favourites" component={FavouriteScreen} />
+          <Tab.Screen name="Assistant"  component={AssistantScreen}  options={{ title: 'Assistant' }} />
           <Tab.Screen name="Bookings"   component={BookingsScreen} />
           <Tab.Screen name="Profile"    component={ProfileScreen} />
         </>

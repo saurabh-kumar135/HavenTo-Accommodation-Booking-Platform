@@ -1,12 +1,12 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { API_URL } from '../config/api';
+import { API_URL, CLOUD_URL } from '../config/api';
 
 // Create axios instance pointing at the HavenTo backend
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 60000,
+  timeout: 10000,
 });
 
 // ── Request interceptor: attach JWT token to every request ─────────────────
@@ -27,12 +27,18 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// ── Response interceptor: handle 401 (token expired) ──────────────────────
+// ── Response interceptor: handle 401 & Cloud Failover ──────────────────────
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
       await SecureStore.deleteItemAsync('havento_jwt');
+    }
+    // Auto-failover: If local connection times out / fails, retry via Cloud URL
+    if (!error.response && error.config && !error.config._retriedWithCloud && CLOUD_URL) {
+      error.config._retriedWithCloud = true;
+      error.config.baseURL = CLOUD_URL;
+      return axios(error.config);
     }
     return Promise.reject(error);
   }
@@ -73,5 +79,11 @@ export const getHostHomes = ()         => api.get('/api/host/host-home-list');
 export const addHome      = (formData) => api.post('/api/host/add-home', formData);
 export const editHome     = (formData) => api.post('/api/host/edit-home', formData);
 export const deleteHome   = (id)       => api.post(`/api/host/delete-home/${id}`);
+
+// ── HavenTo AI Assistant ──────────────────────────────────────────────────
+export const sendAgentChat = (message, chatHistory = []) =>
+  api.post('/api/agent/chat', { message, chatHistory });
+export const clearAgentChat = () =>
+  api.post('/api/agent/clear').catch(() => {});
 
 export default api;

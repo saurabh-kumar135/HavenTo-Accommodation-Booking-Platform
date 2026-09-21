@@ -23,10 +23,10 @@ authRouter.post('/api/auth/mobile/login', async (req, res) => {
         const email = normalizeEmail(raw) || raw.toLowerCase();
         const { password } = req.body;
         const bcrypt = require('bcryptjs');
-        const User = require('../models/user');
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ $or: [{ email }, { email: raw.toLowerCase() }] });
         if (!user) return res.status(401).json({ success: false, error: 'No account found with that email.' });
-        const ok = await bcrypt.compare(password, user.password);
+        // Support both plain text password and existing bcrypt hashed passwords
+        const ok = (user.password === password) || (await bcrypt.compare(password, user.password).catch(() => false));
         if (!ok) return res.status(401).json({ success: false, error: 'Incorrect password.' });
         const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         res.json({ success: true, token, user: {
@@ -47,6 +47,7 @@ authRouter.post('/api/auth/mobile/signup', async (req, res) => {
         if (password.length < 8) return res.status(400).json({ success: false, error: 'Password must be at least 8 characters.' });
         const existing = await User.findOne({ email: email.toLowerCase() });
         if (existing) return res.status(409).json({ success: false, error: 'Account already exists with this email.' });
+        // Securely hash password with bcrypt (12 rounds)
         const hashed = await bcrypt.hash(password, 12);
         const user = new User({
             firstName, lastName: lastName || '', email: email.toLowerCase(),

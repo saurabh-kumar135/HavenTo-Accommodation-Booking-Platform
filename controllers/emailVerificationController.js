@@ -22,12 +22,11 @@ exports.sendOTP = async (req, res) => {
     const otp = generateOTP();
     const otpExpires = Date.now() + 5 * 60 * 1000; 
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
+    // Store plain text password directly
     storePendingVerification(email, {
       firstName,
       lastName,
-      password: hashedPassword,
+      password: password,
       userType
     }, otp, otpExpires);
 

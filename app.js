@@ -20,7 +20,8 @@ const hostRouter = require("./routes/hostRouter")
 const authRouter = require("./routes/authRouter")
 const passwordResetRouter = require("./routes/passwordResetRoutes")
 const emailVerificationRouter = require("./routes/emailVerificationRoutes")
-const agentRouter = require("./routes/agentRouter") 
+const agentRouter = require("./routes/agentRouter");
+const analyticsRouter = require("./routes/analyticsRouter");
 const rootDir = require("./utils/pathUtil");
 const errorsController = require("./controllers/errors");
 const { apiLimiter } = require('./middleware/rateLimiter');
@@ -163,6 +164,7 @@ app.use('/api/verify-email', emailVerificationRouter);
 app.use(storeRouter);
 app.use(hostRouter);
 app.use('/api/agent', agentRouter);
+app.use('/api/analytics', analyticsRouter);
 
 app.use(errorsController.pageNotFound);
 

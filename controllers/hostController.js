@@ -3,16 +3,25 @@ const jwt = require('jsonwebtoken');
 const Home = require("../models/home");
 const User = require("../models/user");
 const fs = require("fs");
+const kycService = require("../services/kycService");
 
 async function resolveUser(req) {
-  if (req.session?.user?._id) return req.session.user;
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
+  let userId = req.session?.user?._id;
+  if (!userId) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || 'havento_mobile_secret_key_2024');
+        userId = decoded.userId;
+      } catch (e) { return null; }
+    }
+  }
+  if (userId) {
     try {
-      const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || 'havento_mobile_secret_key_2024');
-      const user = await User.findById(decoded.userId).select('-password');
-      if (user) return user;
-    } catch (e) { return null; }
+      return await User.findById(userId).select('-password');
+    } catch (err) {
+      return null;
+    }
   }
   return null;
 }
@@ -71,6 +80,21 @@ exports.getHostHomes = async (req, res, next) => {
 
 exports.postAddHome = async (req, res, next) => {
   const user = await resolveUser(req);
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      message: "Please log in to add a home.",
+    });
+  }
+
+  if (!user.hostKyc?.isVerified) {
+    return res.status(403).json({
+      success: false,
+      requireKyc: true,
+      message: "Host identity verification required. Please verify your Aadhaar or PAN card before listing a property.",
+    });
+  }
+
   const { houseName, price, location, description, latitude, longitude } = req.body;
   const rating = req.body.rating || 0;
   console.log('postAddHome req.body:', req.body);
@@ -235,4 +259,88 @@ exports.postDeleteHome = async (req, res, next) => {
       message: "Error deleting home",
     });
   }
+};
+
+/**
+ * KYC Verification Endpoints
+ */
+exports.postVerifyKyc = async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required to verify host identity.",
+      });
+    }
+
+    const { documentType, documentNumber, fullName } = req.body;
+    if (!documentType || !documentNumber || !fullName) {
+      return res.status(422).json({
+        success: false,
+        message: "Document type, document number, and full legal name are required.",
+      });
+    }
+
+    const verification = await kycService.verifyHostIdentity({
+      documentType,
+      documentNumber,
+      fullName,
+    });
+
+    if (!verification.success) {
+      return res.status(422).json({
+        success: false,
+        message: verification.error || "Verification failed.",
+      });
+    }
+
+    user.hostKyc = {
+      isVerified: true,
+      documentType: verification.documentType,
+      maskedNumber: verification.maskedNumber,
+      documentHash: verification.documentHash,
+      fullNameAsOnDoc: verification.fullNameAsOnDoc,
+      status: 'verified',
+      verificationRef: verification.verificationRef,
+      verifiedAt: verification.verifiedAt,
+    };
+    user.userType = 'host';
+    await user.save();
+
+    if (req.session?.user) {
+      req.session.user.hostKyc = user.hostKyc;
+      req.session.user.userType = user.userType;
+      await req.session.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `${verification.documentType.toUpperCase()} verified successfully! You are now a Verified Host on HavenTo.`,
+      hostKyc: user.hostKyc,
+      userType: user.userType,
+    });
+  } catch (err) {
+    console.error("KYC verification error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during KYC verification.",
+      error: err.message,
+    });
+  }
+};
+
+exports.getKycStatus = async (req, res, next) => {
+  const user = await resolveUser(req);
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      message: "Authentication required.",
+    });
+  }
+  return res.status(200).json({
+    success: true,
+    hostKyc: user.hostKyc || { isVerified: false, status: 'unverified' },
+    userType: user.userType,
+  });
 };

@@ -23,7 +23,7 @@ const HomeCard = ({
     typeof isFavouriteProp === 'boolean'
       ? isFavouriteProp
       : Boolean(
-          user?.favourites?.some((fav) => String(fav) === String(homeId))
+          user?.favourites?.some((fav) => String(fav?._id || fav) === String(homeId))
         );
 
   const getHomeImageUrl = () => {
@@ -70,6 +70,15 @@ const HomeCard = ({
             }}
           />
         </Link>
+        {/* Verified Host Badge */}
+        {home.hostId?.hostKyc?.isVerified && (
+          <div className="absolute top-3 left-3 bg-emerald-700/90 backdrop-blur-md text-white px-2.5 py-1 rounded-full text-[11px] font-bold shadow-md flex items-center gap-1 z-10" title={`Identity Verified with ${home.hostId.hostKyc.documentType?.toUpperCase()}`}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-emerald-200" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM13.707 8.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span>Verified Host</span>
+          </div>
+        )}
 
         {/* Floating Heart Button */}
         {(onAddFavourite || onRemoveFavourite || showFavourite || showRemoveFavourite) && (
@@ -222,6 +231,25 @@ const HomeCard = ({
                 />
               </svg>
               Save
+            </button>
+          )}
+
+          {showFavourite && isFav && !showRemoveFavourite && (
+            <button
+              type="button"
+              onClick={() => (onRemoveFavourite ? onRemoveFavourite(homeId) : onAddFavourite(homeId))}
+              className="py-2 px-3 bg-rose-500 hover:bg-rose-600 text-white font-semibold text-xs rounded-xl border border-rose-500 transition flex items-center justify-center gap-1 shadow-sm"
+              title="Saved to Favourites (Click to remove)"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="w-3.5 h-3.5 text-white"
+              >
+                <path d="m11.645 20.91-.007-.003-.022-.012a15.247 15.247 0 0 1-.383-.218 25.18 25.18 0 0 1-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0 1 12 5.052 5.5 5.5 0 0 1 16.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 0 1-4.244 3.17 15.247 15.247 0 0 1-.383.219l-.022.012-.007.004-.003.001a.752.752 0 0 1-.704 0l-.003-.001Z" />
+              </svg>
+              Saved
             </button>
           )}
 
