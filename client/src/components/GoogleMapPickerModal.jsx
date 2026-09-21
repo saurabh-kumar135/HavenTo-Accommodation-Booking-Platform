@@ -15,6 +15,8 @@ L.Icon.Default.mergeOptions({
 
 const POPULAR_DESTINATIONS = [
   { name: 'Bijnor, Uttar Pradesh', lat: 29.3695, lng: 78.1371 },
+  { name: 'Taharpur, Bijnor', lat: 29.4140, lng: 78.1630 },
+  { name: 'Kiratpur, Bijnor', lat: 29.5080, lng: 78.2040 },
   { name: 'Meerut, Uttar Pradesh', lat: 28.9845, lng: 77.7064 },
   { name: 'Delhi, India', lat: 28.6139, lng: 77.2090 },
   { name: 'Agra, Uttar Pradesh', lat: 27.1767, lng: 78.0081 },
@@ -51,22 +53,25 @@ const searchNominatim = async (query) => {
 };
 
 const TILE_LAYERS = {
-  googleRoad: {
-    name: 'Google Map',
-    url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-    attribution: '&copy; Google Maps',
-    maxZoom: 20,
-  },
   googleSat: {
     name: 'Satellite',
-    url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
     attribution: '&copy; Google Satellite',
+    subdomains: ['0', '1', '2', '3'],
+    maxZoom: 20,
+  },
+  googleRoad: {
+    name: 'Map',
+    url: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+    attribution: '&copy; Google Maps',
+    subdomains: ['0', '1', '2', '3'],
     maxZoom: 20,
   },
   osm: {
     name: 'Street Map',
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; OpenStreetMap contributors',
+    subdomains: ['a', 'b', 'c'],
     maxZoom: 19,
   },
 };
@@ -87,13 +92,30 @@ const GoogleMapPickerModal = ({
   const [locating, setLocating] = useState(false);
   const [searching, setSearching] = useState(false);
   const [geoError, setGeoError] = useState('');
-  const [mapLayerType, setMapLayerType] = useState('googleRoad');
+  const [mapLayerType, setMapLayerType] = useState(() => {
+    try {
+      return localStorage.getItem('havento_map_layer') || 'googleSat';
+    } catch {
+      return 'googleSat';
+    }
+  });
   const [statusMsg, setStatusMsg] = useState('');
 
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
   const tileLayerRef = useRef(null);
+  const watchIdRef = useRef(null);
+
+  // Clean up any active geolocation watch on unmount
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, []);
 
   // Reverse geocoding: zoom=18 gives building-level precision from Nominatim.
   // Builds label from most granular field available (road → hamlet → village → town → city).
@@ -133,13 +155,13 @@ const GoogleMapPickerModal = ({
     return `Near ${Number(lat).toFixed(4)}°N, ${Number(lng).toFixed(4)}°E`;
   };
 
-  // Helper to move marker and fly to coordinates
-  const updateMapPosition = (lat, lng, zoomLevel = 15) => {
+  // Helper to move marker and fly to coordinates (default zoom 18 for rooftop/satellite visibility)
+  const updateMapPosition = (lat, lng, zoomLevel = 18) => {
     const latNum = Number(lat);
     const lngNum = Number(lng);
     if (!isNaN(latNum) && !isNaN(lngNum) && mapInstanceRef.current && markerRef.current) {
       markerRef.current.setLatLng([latNum, lngNum]);
-      mapInstanceRef.current.flyTo([latNum, lngNum], zoomLevel, { duration: 1.2 });
+      mapInstanceRef.current.flyTo([latNum, lngNum], zoomLevel, { duration: 1.0 });
     }
   };
 
@@ -155,6 +177,7 @@ const GoogleMapPickerModal = ({
     // Only reject if it's the exact centroid OR accuracy is worse than 50 km
     return isExactIndiaCentroid || (accuracy && accuracy > 50000);
   };
+
   // Multi-tier IP location fallback with reverse-geocoded label
   const fetchIpLocation = async (reason = '') => {
     if (reason) setStatusMsg(`📡 ${reason}…`);
@@ -178,8 +201,9 @@ const GoogleMapPickerModal = ({
             setSearchQuery(placeName);
             setGeoError('');
             setLocating(false);
-            setStatusMsg('');
-            updateMapPosition(lat, lng, 13);
+            setStatusMsg('📍 Showing estimated network area. Drag pin to your exact house.');
+            updateMapPosition(lat, lng, 14);
+            setTimeout(() => setStatusMsg(''), 5000);
             return true;
           }
         }
@@ -208,8 +232,9 @@ const GoogleMapPickerModal = ({
             setSearchQuery(placeName);
             setGeoError('');
             setLocating(false);
-            setStatusMsg('');
-            updateMapPosition(lat, lng, 13);
+            setStatusMsg('📍 Showing estimated network area. Drag pin to your exact house.');
+            updateMapPosition(lat, lng, 14);
+            setTimeout(() => setStatusMsg(''), 5000);
             return true;
           }
         }
@@ -224,68 +249,144 @@ const GoogleMapPickerModal = ({
     return false;
   };
 
-  // GPS button: try hardware GPS first, fall back to IP after 12s
+  // GPS button: robust mobile-first geolocation with high accuracy, cached fix fallback, and watch refinement
   const handleUseCurrentLocation = () => {
     setLocating(true);
     setGeoError('');
-    setStatusMsg('🛰 Getting your GPS location…');
+    setStatusMsg('🛰 Acquiring high-precision GPS…');
 
-    if (!navigator.geolocation) {
-      fetchIpLocation('GPS not available, using network location');
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      fetchIpLocation('GPS not supported on this browser, using network location');
+      return;
+    }
+
+    // Insecure origin check: modern mobile browsers (Android Chrome, iOS Safari) strictly block GPS on plain HTTP
+    if (
+      typeof window !== 'undefined' &&
+      !window.isSecureContext &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      console.warn('Geolocation blocked: insecure origin (requires HTTPS on mobile)');
+      setGeoError('⚠️ Mobile browsers block GPS over plain HTTP. For exact GPS, access via HTTPS or search your colony/address above.');
+      fetchIpLocation('HTTP origin blocked GPS, using network location');
       return;
     }
 
     let resolved = false;
+
+    // Safety fallback timer if device GPS hardware hangs without responding (give phone 16 seconds)
     const fallbackTimer = setTimeout(() => {
       if (!resolved) {
         resolved = true;
+        if (watchIdRef.current !== null && navigator.geolocation) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
         console.warn('GPS timed out → IP fallback');
-        fetchIpLocation('GPS timed out, using network location');
+        fetchIpLocation('GPS taking longer than usual, using network location');
       }
-    }, 12000);
+    }, 16000);
 
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        if (resolved) return;
-        const rawLat = pos.coords.latitude;
-        const rawLng = pos.coords.longitude;
-        const accuracy = pos.coords.accuracy; // metres
+    const onLocationSuccess = async (pos) => {
+      const rawLat = pos.coords.latitude;
+      const rawLng = pos.coords.longitude;
+      const accuracy = pos.coords.accuracy || 50; // in metres
 
-        console.log(`GPS: lat=${rawLat}, lng=${rawLng}, accuracy=${accuracy}m`);
+      console.log(`GPS: lat=${rawLat}, lng=${rawLng}, accuracy=${accuracy}m`);
 
-        if (isGenericCentroid(rawLat, rawLng, accuracy)) {
+      if (isGenericCentroid(rawLat, rawLng, accuracy)) {
+        if (!resolved) {
           clearTimeout(fallbackTimer);
           resolved = true;
-          await fetchIpLocation('GPS gave inaccurate result, using network location');
-          return;
+          if (watchIdRef.current !== null && navigator.geolocation) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+          }
+          await fetchIpLocation('GPS returned generic region, using network location');
         }
+        return;
+      }
 
+      resolved = true;
+      clearTimeout(fallbackTimer);
+
+      const lat = rawLat.toFixed(6);
+      const lng = rawLng.toFixed(6);
+      setLatitude(lat);
+      setLongitude(lng);
+
+      // If accuracy is high (< 40m, typical phone GPS), stop watching
+      if (accuracy <= 40 && watchIdRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+
+      setStatusMsg(accuracy <= 30 ? '🎯 Locked onto exact GPS position!' : `📍 GPS accuracy ~${Math.round(accuracy)}m`);
+
+      const placeName = await reverseGeocode(lat, lng);
+      setSelectedLocation(placeName);
+      setSearchQuery(placeName);
+      setLocating(false);
+
+      // Zoom level: in satellite mode, zoom 18-19 lets the user see their exact house rooftop and boundary!
+      const zoom = accuracy <= 35 ? 19 : accuracy <= 150 ? 18 : accuracy <= 1000 ? 16 : 14;
+      updateMapPosition(lat, lng, zoom);
+
+      setTimeout(() => {
+        setStatusMsg('');
+      }, 4500);
+    };
+
+    const onLocationError = (err) => {
+      if (resolved) return;
+      console.warn('GPS error:', err?.code, err?.message);
+
+      // Code 1 = PERMISSION_DENIED
+      if (err?.code === 1) {
         resolved = true;
         clearTimeout(fallbackTimer);
-
-        const lat = rawLat.toFixed(6);
-        const lng = rawLng.toFixed(6);
-        setLatitude(lat);
-        setLongitude(lng);
-        setStatusMsg('📍 Pinpointing your area…');
-
-        const placeName = await reverseGeocode(lat, lng);
-        setSelectedLocation(placeName);
-        setSearchQuery(placeName);
+        if (watchIdRef.current !== null && navigator.geolocation) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
         setLocating(false);
         setStatusMsg('');
-        // Zoom: <200m accuracy → zoom 17, <5km → zoom 15, else zoom 13
-        const zoom = accuracy < 200 ? 17 : accuracy < 5000 ? 15 : 13;
-        updateMapPosition(lat, lng, zoom);
-      },
+        setGeoError('⚠️ Location permission was denied. Please allow location access in your phone browser settings, or search your address above.');
+        return;
+      }
+
+      // Timeout or position unavailable → fall back to IP geolocation
+      resolved = true;
+      clearTimeout(fallbackTimer);
+      if (watchIdRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      fetchIpLocation('GPS signal weak, using network location');
+    };
+
+    // Stage 1: Fast cached or immediate high-accuracy position (maximumAge: 180000 = 3 minutes)
+    // On phones with location turned on, this returns the hardware GPS fix in < 300ms!
+    navigator.geolocation.getCurrentPosition(
+      onLocationSuccess,
       (err) => {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(fallbackTimer);
-        console.warn('GPS error:', err.message);
-        fetchIpLocation('GPS denied, using network location');
+        if (err?.code === 1) {
+          onLocationError(err);
+          return;
+        }
+        // Stage 2: If quick check had weak signal, watch for GPS satellite lock
+        try {
+          watchIdRef.current = navigator.geolocation.watchPosition(
+            onLocationSuccess,
+            onLocationError,
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 300000 }
+          );
+        } catch (watchErr) {
+          onLocationError(err);
+        }
       },
-      { timeout: 11000, enableHighAccuracy: true, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 14000, maximumAge: 180000 }
     );
   };
 
@@ -309,7 +410,7 @@ const GoogleMapPickerModal = ({
       setSelectedLocation(betterName || result.display_name || q);
       setSearchQuery(betterName || result.display_name || q);
       setSearching(false);
-      updateMapPosition(lat, lng, 15);
+      updateMapPosition(lat, lng, 18);
     } else {
       setGeoError(`"${q}" was not found. Try a nearby city (e.g. "Bijnor") or click on the map to pin manually.`);
       setSelectedLocation(q);
@@ -326,18 +427,22 @@ const GoogleMapPickerModal = ({
     setLatitude(lat);
     setLongitude(lng);
     setGeoError('');
-    updateMapPosition(lat, lng, 14);
+    updateMapPosition(lat, lng, 16);
   };
 
-  // Switch map layer (Google Road, Satellite, OpenStreetMap)
+  // Switch map layer (Satellite, Google Road, OpenStreetMap)
   const handleSwitchLayer = (type) => {
     setMapLayerType(type);
+    try {
+      localStorage.setItem('havento_map_layer', type);
+    } catch {}
     if (mapInstanceRef.current && tileLayerRef.current) {
       mapInstanceRef.current.removeLayer(tileLayerRef.current);
-      const newLayer = TILE_LAYERS[type] || TILE_LAYERS.googleRoad;
+      const newLayer = TILE_LAYERS[type] || TILE_LAYERS.googleSat;
       tileLayerRef.current = L.tileLayer(newLayer.url, {
         attribution: newLayer.attribution,
         maxZoom: newLayer.maxZoom,
+        subdomains: newLayer.subdomains || ['0', '1', '2', '3'],
       }).addTo(mapInstanceRef.current);
     }
   };
@@ -349,7 +454,7 @@ const GoogleMapPickerModal = ({
     const latNum = parseFloat(newLat);
     const lngNum = parseFloat(newLng);
     if (!isNaN(latNum) && !isNaN(lngNum) && latNum >= -90 && latNum <= 90 && lngNum >= -180 && lngNum <= 180) {
-      updateMapPosition(latNum, lngNum, 15);
+      updateMapPosition(latNum, lngNum, 18);
     }
   };
 
@@ -381,14 +486,15 @@ const GoogleMapPickerModal = ({
       if (!mapInstanceRef.current) {
         const map = L.map(mapContainerRef.current, {
           center: [initLat, initLng],
-          zoom: 14,
+          zoom: 16,
           zoomControl: true,
         });
 
-        const activeLayer = TILE_LAYERS[mapLayerType] || TILE_LAYERS.googleRoad;
+        const activeLayer = TILE_LAYERS[mapLayerType] || TILE_LAYERS.googleSat;
         tileLayerRef.current = L.tileLayer(activeLayer.url, {
           attribution: activeLayer.attribution,
           maxZoom: activeLayer.maxZoom,
+          subdomains: activeLayer.subdomains || ['0', '1', '2', '3'],
         }).addTo(map);
 
         const marker = L.marker([initLat, initLng], { draggable: true }).addTo(map);
@@ -509,7 +615,7 @@ const GoogleMapPickerModal = ({
               onClick={handleUseCurrentLocation}
               disabled={locating}
               className="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl transition flex items-center gap-1 shrink-0 cursor-pointer"
-              title="Auto-detect current location (GPS / Network)"
+              title="Auto-detect exact GPS location on your phone"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 ${locating ? 'animate-spin' : ''}`}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
@@ -527,13 +633,12 @@ const GoogleMapPickerModal = ({
 
           {geoError && (
             <p className="text-xs text-amber-700 font-medium bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
-              ⚠️ {geoError}
+              {geoError}
             </p>
           )}
 
           <p className="text-[10px] text-gray-400 leading-relaxed">
-            💡 <strong>Tip:</strong> On desktop/laptop, GPS uses your internet connection and may show a nearby city instead of your exact house.
-            For precise location, <strong>type your village/colony name</strong> in the search box, then <strong>drag the 📍 pin</strong> to your exact house.
+            💡 <strong>Phone Tip:</strong> Make sure Location/GPS is ON and allowed in your browser. In <strong>🛰 Satellite mode</strong>, the map will zoom directly into your exact building/house rooftop. You can also drag the 📍 pin to adjust.
           </p>
 
           {/* Quick Suggestions & Layer Bar */}
@@ -560,30 +665,33 @@ const GoogleMapPickerModal = ({
             <div className="flex items-center bg-gray-100 p-0.5 rounded-lg text-[10px] font-semibold">
               <button
                 type="button"
-                onClick={() => handleSwitchLayer('googleRoad')}
-                className={`px-2 py-0.5 rounded transition cursor-pointer ${
-                  mapLayerType === 'googleRoad' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-900'
+                onClick={() => handleSwitchLayer('googleSat')}
+                className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
+                  mapLayerType === 'googleSat' ? 'bg-[#A67C52] text-white shadow-xs font-bold' : 'text-gray-600 hover:text-gray-900'
                 }`}
+                title="Google Satellite imagery with street labels"
               >
-                Map
+                <span>🛰 Satellite</span>
               </button>
               <button
                 type="button"
-                onClick={() => handleSwitchLayer('googleSat')}
-                className={`px-2 py-0.5 rounded transition cursor-pointer ${
-                  mapLayerType === 'googleSat' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-900'
+                onClick={() => handleSwitchLayer('googleRoad')}
+                className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
+                  mapLayerType === 'googleRoad' ? 'bg-[#A67C52] text-white shadow-xs font-bold' : 'text-gray-600 hover:text-gray-900'
                 }`}
+                title="Google standard map"
               >
-                Satellite
+                <span>🗺 Map</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleSwitchLayer('osm')}
-                className={`px-2 py-0.5 rounded transition cursor-pointer ${
-                  mapLayerType === 'osm' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-900'
+                className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
+                  mapLayerType === 'osm' ? 'bg-[#A67C52] text-white shadow-xs font-bold' : 'text-gray-600 hover:text-gray-900'
                 }`}
+                title="OpenStreetMap view"
               >
-                OSM
+                <span>OSM</span>
               </button>
             </div>
           </div>
@@ -594,8 +702,8 @@ const GoogleMapPickerModal = ({
 
             {/* Hint overlay on top-left of map */}
             <div className="absolute top-2.5 left-12 z-20 pointer-events-none bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-md shadow-xs border border-gray-200 text-[11px] text-gray-700 flex items-center gap-1.5 font-medium">
-              <span>📍</span>
-              <span>Click or drag pin to your exact house</span>
+              <span>{mapLayerType === 'googleSat' ? '🛰' : '📍'}</span>
+              <span>{mapLayerType === 'googleSat' ? 'Satellite View: Click or drag pin to your exact rooftop' : 'Click or drag pin to your exact house'}</span>
             </div>
 
             {/* Direct Open in Google Maps Link */}
