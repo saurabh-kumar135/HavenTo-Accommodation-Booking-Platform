@@ -165,17 +165,18 @@ const GoogleMapPickerModal = ({
     }
   };
 
-  // Only reject the exact India geographic centroid OR truly terrible accuracy (>50 km).
-  // Do NOT block valid UP / North India coordinates which are far from the centroid.
+  // Detect generic country centroid (Hirdi / Maharashtra desktop fallback) or low accuracy (>10km).
+  // This is the EXACT same logic as the working Sept 19 version (commit 3106fc6).
   const isGenericCentroid = (lat, lng, accuracy) => {
     const latNum = Number(lat);
     const lngNum = Number(lng);
     if (isNaN(latNum) || isNaN(lngNum)) return false;
-    const isExactIndiaCentroid =
-      Math.abs(latNum - 20.5938) < 0.10 &&
-      Math.abs(lngNum - 78.9629) < 0.10;
-    // Only reject if it's the exact centroid OR accuracy is worse than 50 km
-    return isExactIndiaCentroid || (accuracy && accuracy > 50000);
+    const isNearHirdi =
+      Math.abs(latNum - 20.5938) < 0.35 &&
+      Math.abs(lngNum - 78.9629) < 0.35;
+    // Reject if it's the country centroid OR accuracy is worse than 10 km
+    const isLowAccuracy = accuracy && accuracy > 10000;
+    return isNearHirdi || isLowAccuracy;
   };
 
   // Multi-tier IP location fallback with reverse-geocoded label
@@ -249,33 +250,21 @@ const GoogleMapPickerModal = ({
     return false;
   };
 
-  // GPS button: robust mobile-first geolocation with high accuracy, cached fix fallback, and watch refinement
+  // GPS button — matches the EXACT working logic from Sept 19 (commit 3106fc6)
+  // Key: maximumAge: 60000 (1 min cached GPS = instant on phones), no HTTP block.
   const handleUseCurrentLocation = () => {
     setLocating(true);
     setGeoError('');
-    setStatusMsg('🛰 Acquiring high-precision GPS…');
+    setStatusMsg('🛰 Getting your GPS location…');
 
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      fetchIpLocation('GPS not supported on this browser, using network location');
-      return;
-    }
-
-    // Insecure origin check: modern mobile browsers (Android Chrome, iOS Safari) strictly block GPS on plain HTTP
-    if (
-      typeof window !== 'undefined' &&
-      !window.isSecureContext &&
-      window.location.hostname !== 'localhost' &&
-      window.location.hostname !== '127.0.0.1'
-    ) {
-      console.warn('Geolocation blocked: insecure origin (requires HTTPS on mobile)');
-      setGeoError('⚠️ Mobile browsers block GPS over plain HTTP. For exact GPS, access via HTTPS or search your colony/address above.');
-      fetchIpLocation('HTTP origin blocked GPS, using network location');
+    if (!navigator.geolocation) {
+      fetchIpLocation('GPS not available, using network location');
       return;
     }
 
     let resolved = false;
 
-    // Safety fallback timer if device GPS hardware hangs without responding (give phone 16 seconds)
+    // Safety fallback: if GPS takes > 12 seconds, switch to IP location
     const fallbackTimer = setTimeout(() => {
       if (!resolved) {
         resolved = true;
@@ -284,44 +273,42 @@ const GoogleMapPickerModal = ({
           watchIdRef.current = null;
         }
         console.warn('GPS timed out → IP fallback');
-        fetchIpLocation('GPS taking longer than usual, using network location');
+        fetchIpLocation('GPS timed out, using network location');
       }
-    }, 16000);
+    }, 12000);
 
     const onLocationSuccess = async (pos) => {
+      if (resolved) return;
       const rawLat = pos.coords.latitude;
       const rawLng = pos.coords.longitude;
-      const accuracy = pos.coords.accuracy || 50; // in metres
+      const accuracy = pos.coords.accuracy;
 
       console.log(`GPS: lat=${rawLat}, lng=${rawLng}, accuracy=${accuracy}m`);
 
       if (isGenericCentroid(rawLat, rawLng, accuracy)) {
-        if (!resolved) {
-          clearTimeout(fallbackTimer);
-          resolved = true;
-          if (watchIdRef.current !== null && navigator.geolocation) {
-            navigator.geolocation.clearWatch(watchIdRef.current);
-            watchIdRef.current = null;
-          }
-          await fetchIpLocation('GPS returned generic region, using network location');
+        clearTimeout(fallbackTimer);
+        resolved = true;
+        if (watchIdRef.current !== null && navigator.geolocation) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
         }
+        await fetchIpLocation('GPS gave generic result, using network location');
         return;
       }
 
       resolved = true;
       clearTimeout(fallbackTimer);
 
-      const lat = rawLat.toFixed(6);
-      const lng = rawLng.toFixed(6);
-      setLatitude(lat);
-      setLongitude(lng);
-
-      // If accuracy is high (< 40m, typical phone GPS), stop watching
-      if (accuracy <= 40 && watchIdRef.current !== null && navigator.geolocation) {
+      // Stop watching once we have a good fix (< 40m, typical phone GPS)
+      if (watchIdRef.current !== null && navigator.geolocation) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
       }
 
+      const lat = rawLat.toFixed(6);
+      const lng = rawLng.toFixed(6);
+      setLatitude(lat);
+      setLongitude(lng);
       setStatusMsg(accuracy <= 30 ? '🎯 Locked onto exact GPS position!' : `📍 GPS accuracy ~${Math.round(accuracy)}m`);
 
       const placeName = await reverseGeocode(lat, lng);
@@ -329,45 +316,36 @@ const GoogleMapPickerModal = ({
       setSearchQuery(placeName);
       setLocating(false);
 
-      // Zoom level: in satellite mode, zoom 18-19 lets the user see their exact house rooftop and boundary!
+      // Satellite zoom: 18–19 shows individual building rooftop
       const zoom = accuracy <= 35 ? 19 : accuracy <= 150 ? 18 : accuracy <= 1000 ? 16 : 14;
       updateMapPosition(lat, lng, zoom);
 
-      setTimeout(() => {
-        setStatusMsg('');
-      }, 4500);
+      setTimeout(() => setStatusMsg(''), 4500);
     };
 
     const onLocationError = (err) => {
       if (resolved) return;
-      console.warn('GPS error:', err?.code, err?.message);
-
-      // Code 1 = PERMISSION_DENIED
-      if (err?.code === 1) {
-        resolved = true;
-        clearTimeout(fallbackTimer);
-        if (watchIdRef.current !== null && navigator.geolocation) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
-          watchIdRef.current = null;
-        }
-        setLocating(false);
-        setStatusMsg('');
-        setGeoError('⚠️ Location permission was denied. Please allow location access in your phone browser settings, or search your address above.');
-        return;
-      }
-
-      // Timeout or position unavailable → fall back to IP geolocation
       resolved = true;
       clearTimeout(fallbackTimer);
       if (watchIdRef.current !== null && navigator.geolocation) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
       }
-      fetchIpLocation('GPS signal weak, using network location');
+      console.warn('GPS error:', err?.code, err?.message);
+
+      if (err?.code === 1) {
+        // PERMISSION_DENIED
+        setLocating(false);
+        setStatusMsg('');
+        setGeoError('Location permission denied. Please allow location access in your phone browser settings.');
+        return;
+      }
+      fetchIpLocation('GPS unavailable, using network location');
     };
 
-    // Stage 1: Fast cached or immediate high-accuracy position (maximumAge: 180000 = 3 minutes)
-    // On phones with location turned on, this returns the hardware GPS fix in < 300ms!
+    // maximumAge: 60000 = use phone GPS cache up to 1 minute old.
+    // On phones with location ON, this returns the hardware GPS in < 300ms.
+    // This is IDENTICAL to what worked on Sept 19.
     navigator.geolocation.getCurrentPosition(
       onLocationSuccess,
       (err) => {
@@ -375,18 +353,18 @@ const GoogleMapPickerModal = ({
           onLocationError(err);
           return;
         }
-        // Stage 2: If quick check had weak signal, watch for GPS satellite lock
+        // Weak signal: watch for GPS satellite lock up to 12 more seconds
         try {
           watchIdRef.current = navigator.geolocation.watchPosition(
             onLocationSuccess,
             onLocationError,
-            { enableHighAccuracy: true, timeout: 12000, maximumAge: 300000 }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
           );
         } catch (watchErr) {
           onLocationError(err);
         }
       },
-      { enableHighAccuracy: true, timeout: 14000, maximumAge: 180000 }
+      { enableHighAccuracy: true, timeout: 9000, maximumAge: 60000 }
     );
   };
 
