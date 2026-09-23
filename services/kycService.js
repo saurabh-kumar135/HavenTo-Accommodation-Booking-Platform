@@ -66,22 +66,10 @@ function validateAadhaar(aadhaarNumber, fullName) {
     return { valid: false, error: 'Aadhaar number is required.' };
   }
 
-  // Strip spaces, dashes, or formatting
-  const cleanNumber = aadhaarNumber.replace(/[\s-]/g, '');
+  const cleanNumber = String(aadhaarNumber).replace(/[\s-]/g, '');
 
   if (!/^\d{12}$/.test(cleanNumber)) {
     return { valid: false, error: 'Aadhaar number must be exactly 12 numeric digits.' };
-  }
-
-  if (cleanNumber.startsWith('0') || cleanNumber.startsWith('1')) {
-    return { valid: false, error: 'Valid Aadhaar numbers cannot begin with 0 or 1.' };
-  }
-
-  if (!validateVerhoeff(cleanNumber)) {
-    return {
-      valid: false,
-      error: 'Invalid Aadhaar checksum (Verhoeff check failed). Please re-check the number.'
-    };
   }
 
   if (!fullName || fullName.trim().length < 2) {

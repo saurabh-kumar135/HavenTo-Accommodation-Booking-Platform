@@ -86,18 +86,8 @@ const HostKycModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       let payload = {};
       if (activeTab === 'aadhaar') {
-        if (aadhaarRaw.length !== 12) {
+        if (aadhaarRaw.length !== 12 || !/^\d{12}$/.test(aadhaarRaw)) {
           setError('Aadhaar number must be exactly 12 numeric digits.');
-          setLoading(false);
-          return;
-        }
-        if (aadhaarRaw.startsWith('0') || aadhaarRaw.startsWith('1')) {
-          setError('Aadhaar number cannot begin with 0 or 1.');
-          setLoading(false);
-          return;
-        }
-        if (!checkVerhoeff(aadhaarRaw)) {
-          setError('Invalid Aadhaar number (Verhoeff checksum failed). Please verify your 12 digits.');
           setLoading(false);
           return;
         }
