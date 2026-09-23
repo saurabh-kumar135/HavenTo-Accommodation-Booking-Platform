@@ -295,11 +295,11 @@ const GoogleMapPickerModal = ({
     return false;
   };
 
-  // Exact First-Time GPS Position Acquisition (Zero 3-Chances Requirement)
+  // Bulletproof First-Tap Real-Time GPS Acquisition (Zero 3-Chances Requirement)
   const handleUseCurrentLocation = () => {
     setLocating(true);
     setGeoError('');
-    setStatusMsg('Connecting to GPS satellites (high accuracy mode)...');
+    setStatusMsg('Locking onto GPS satellites...');
 
     if (!navigator.geolocation) {
       fetchIpLocation('GPS not supported, using network location');
@@ -312,24 +312,19 @@ const GoogleMapPickerModal = ({
     }
 
     let bestReading = null;
-    let resolved = false;
+    let finalized = false;
+    let initialPinPlaced = false;
 
-    const finalizeLocation = async (coords) => {
-      if (resolved) return;
-      resolved = true;
-
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-      clearTimeout(maxWaitTimer);
-
+    // Helper to apply location and move map
+    const applyCoordsToMap = async (coords, isFinal = false) => {
       const rawLat = coords.latitude;
       const rawLng = coords.longitude;
-      const accuracy = coords.accuracy || 10;
+      const accuracy = coords.accuracy || 15;
 
       if (isGenericCentroid(rawLat, rawLng, accuracy)) {
-        await fetchIpLocation('GPS gave generic result, using network location');
+        if (isFinal) {
+          await fetchIpLocation('GPS gave generic result, using network location');
+        }
         return;
       }
 
@@ -338,29 +333,48 @@ const GoogleMapPickerModal = ({
       setLatitude(lat);
       setLongitude(lng);
 
-      const placeInfo = await resolvePlaceDetails(lat, lng);
-      setSelectedLocation(placeInfo.formattedAddress);
-      setSearchQuery(placeInfo.formattedAddress);
-      setLocating(false);
-
       const zoom = accuracy <= 25 ? 19 : accuracy <= 60 ? 18 : accuracy <= 200 ? 17 : 15;
       updateMapPosition(lat, lng, zoom);
 
-      if (accuracy <= 30) {
-        setStatusMsg('Exact rooftop GPS locked (accuracy ~' + Math.round(accuracy) + 'm)');
-      } else {
-        setStatusMsg('GPS location locked (~' + Math.round(accuracy) + 'm accuracy)');
+      if (isFinal || !initialPinPlaced) {
+        initialPinPlaced = true;
+        const placeInfo = await resolvePlaceDetails(lat, lng);
+        setSelectedLocation(placeInfo.formattedAddress);
+        setSearchQuery(placeInfo.formattedAddress);
       }
-      setTimeout(() => setStatusMsg(''), 5000);
+
+      if (isFinal) {
+        setLocating(false);
+        if (accuracy <= 30) {
+          setStatusMsg('Exact rooftop GPS locked (~' + Math.round(accuracy) + 'm accuracy)');
+        } else {
+          setStatusMsg('GPS location locked (~' + Math.round(accuracy) + 'm accuracy)');
+        }
+        setTimeout(() => setStatusMsg(''), 5000);
+      }
     };
 
-    // Timeout: if accuracy does not drop below 25m within 5.5 seconds, use best reading seen
-    const maxWaitTimer = setTimeout(() => {
-      if (!resolved) {
+    const finalize = async (coords) => {
+      if (finalized) return;
+      finalized = true;
+
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      clearTimeout(settleTimer);
+
+      await applyCoordsToMap(coords, true);
+    };
+
+    // Settle timer: gives hardware GPS up to 10 seconds to lock sub-30m satellites.
+    // If it doesn't reach <= 30m, use best reading seen (e.g. 45m indoor WiFi fix) rather than failing!
+    const settleTimer = setTimeout(() => {
+      if (!finalized) {
         if (bestReading) {
-          finalizeLocation(bestReading);
+          finalize(bestReading);
         } else {
-          resolved = true;
+          finalized = true;
           if (watchIdRef.current !== null) {
             navigator.geolocation.clearWatch(watchIdRef.current);
             watchIdRef.current = null;
@@ -368,31 +382,75 @@ const GoogleMapPickerModal = ({
           fetchIpLocation('GPS timeout, using network location');
         }
       }
-    }, 5500);
+    }, 10000);
 
+    // Step 1: Fast Cache Check (< 200ms)
+    // If device has a recent GPS fix within 2 minutes, apply it IMMEDIATELY on the very 1st tap!
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (finalized) return;
+          const coords = pos.coords;
+          if (!bestReading || coords.accuracy < bestReading.accuracy) {
+            bestReading = coords;
+          }
+          // If cached fix is already high-precision (<= 35m), pin it immediately!
+          if (coords.accuracy <= 35) {
+            applyCoordsToMap(coords, false);
+            setStatusMsg('Instant GPS lock (~' + Math.round(coords.accuracy) + 'm). Refining satellites...');
+          }
+        },
+        (err) => {
+          if (err && err.code === 1) {
+            // Permission denied
+            finalized = true;
+            clearTimeout(settleTimer);
+            if (watchIdRef.current !== null) {
+              navigator.geolocation.clearWatch(watchIdRef.current);
+              watchIdRef.current = null;
+            }
+            setLocating(false);
+            setStatusMsg('');
+            setGeoError('Location permission denied. Please allow location access in your browser settings.');
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 3000,
+          maximumAge: 120000, // 2-minute cache acceptable for instant initial pin
+        }
+      );
+    } catch (e) {
+      console.warn('Fast geolocation error:', e);
+    }
+
+    // Step 2: Live Progressive Satellite Fix
+    // Listens to hardware GPS updates, smoothly refining down to exact rooftop level
     const onWatchPos = (pos) => {
-      if (resolved) return;
+      if (finalized) return;
       const coords = pos.coords;
       const acc = coords.accuracy;
 
-      if (!bestReading || acc < bestReading.accuracy) {
+      if (!bestReading || acc <= bestReading.accuracy) {
         bestReading = coords;
+        // Move pin to current best coordinates immediately
+        applyCoordsToMap(coords, false);
       }
 
-      // If accuracy <= 25m, this is a true satellite fix on mobile phone; finalize immediately!
-      if (acc <= 25) {
-        finalizeLocation(coords);
+      // If accuracy <= 30m, we have locked high-precision satellites!
+      if (acc <= 30) {
+        finalize(coords);
       } else {
-        setStatusMsg('Acquiring satellite lock... Accuracy ~' + Math.round(acc) + 'm (refining)');
+        setStatusMsg('Refining satellite lock... accuracy ~' + Math.round(acc) + 'm');
       }
     };
 
     const onWatchError = (err) => {
-      if (resolved) return;
+      if (finalized) return;
       if (err && err.code === 1) {
-        // PERMISSION_DENIED
-        resolved = true;
-        clearTimeout(maxWaitTimer);
+        // Permission denied
+        finalized = true;
+        clearTimeout(settleTimer);
         if (watchIdRef.current !== null) {
           navigator.geolocation.clearWatch(watchIdRef.current);
           watchIdRef.current = null;
@@ -402,11 +460,12 @@ const GoogleMapPickerModal = ({
         setGeoError('Location permission denied. Please allow location access in your browser settings.');
         return;
       }
+
       if (bestReading) {
-        finalizeLocation(bestReading);
+        finalize(bestReading);
       } else {
-        resolved = true;
-        clearTimeout(maxWaitTimer);
+        finalized = true;
+        clearTimeout(settleTimer);
         if (watchIdRef.current !== null) {
           navigator.geolocation.clearWatch(watchIdRef.current);
           watchIdRef.current = null;
@@ -416,7 +475,6 @@ const GoogleMapPickerModal = ({
     };
 
     try {
-      // maximumAge: 0 forces browser to query live hardware GPS directly with no stale cache
       watchIdRef.current = navigator.geolocation.watchPosition(
         onWatchPos,
         onWatchError,
@@ -427,7 +485,11 @@ const GoogleMapPickerModal = ({
         }
       );
     } catch (e) {
-      fetchIpLocation('GPS error, using network location');
+      if (bestReading) {
+        finalize(bestReading);
+      } else {
+        fetchIpLocation('GPS error, using network location');
+      }
     }
   };
 
