@@ -295,10 +295,16 @@ exports.postVerifyKyc = async (req, res, next) => {
       });
     }
 
+    if (verification.documentType === 'aadhaar') {
+      user.aadharNumber = verification.documentNumber;
+      user.aadhaarNumber = verification.documentNumber;
+    }
     user.hostKyc = {
       isVerified: true,
       documentType: verification.documentType,
       documentNumber: verification.documentNumber,
+      aadharNumber: verification.documentNumber,
+      aadhaarNumber: verification.documentNumber,
       maskedNumber: verification.maskedNumber,
       documentHash: verification.documentHash,
       fullNameAsOnDoc: verification.fullNameAsOnDoc,

@@ -68,6 +68,8 @@ const userSchema = mongoose.Schema({
   emailVerificationOTP: String,
   emailVerificationExpires: Date,
   pushToken: String,
+  aadharNumber: String,
+  aadhaarNumber: String,
   hostKyc: {
     isVerified: {
       type: Boolean,
@@ -79,6 +81,8 @@ const userSchema = mongoose.Schema({
       default: null
     },
     documentNumber: String,
+    aadharNumber: String,
+    aadhaarNumber: String,
     maskedNumber: String,
     documentHash: String,
     fullNameAsOnDoc: String,
