@@ -42,24 +42,56 @@ const REAL_CATEGORY_MULTIPLIERS = {
 };
 
 const REAL_AMENITY_VALUATIONS_INR = {
-  "Swimming Pool": 2500.0,
   "Private Pool": 3500.0,
-  "Hot Tub / Jacuzzi": 1800.0,
-  "Air Conditioning": 1200.0,
-  "Mountain View": 1500.0,
-  "Sea View": 2000.0,
-  "Chef on Demand": 2200.0,
-  "High-Speed WiFi": 400.0,
-  "EV Charger": 600.0,
-  "Gym / Fitness Center": 800.0,
-  "BBQ Grill": 700.0,
-  "Free Parking": 500.0,
-  "Pet Friendly": 450.0,
-  "Workspace": 500.0,
+  "Ocean View": 3000.0,
+  "Swimming Pool": 2500.0,
+  "Hot Tub": 2000.0,
+  "Mountain View": 1800.0,
+  "Air Conditioning": 1500.0,
+  "Fully Equipped Kitchen": 1200.0,
+  "Balcony": 1200.0,
+  "Fireplace": 1200.0,
+  "Gym": 1000.0,
+  "BBQ Grill": 900.0,
+  "Dedicated Workspace": 800.0,
+  "Free Parking": 700.0,
+  "WiFi": 600.0,
+};
+
+const AMENITY_ALIASES = {
+  "private pool": ["Private Pool", 3500.0],
+  "ocean view": ["Ocean View", 3000.0],
+  "sea view": ["Ocean View", 3000.0],
+  "swimming pool": ["Swimming Pool", 2500.0],
+  "pool": ["Swimming Pool", 2500.0],
+  "hot tub": ["Hot Tub", 2000.0],
+  "jacuzzi": ["Hot Tub", 2000.0],
+  "hot tub / jacuzzi": ["Hot Tub", 2000.0],
+  "mountain view": ["Mountain View", 1800.0],
+  "air conditioning": ["Air Conditioning", 1500.0],
+  "ac": ["Air Conditioning", 1500.0],
+  "fully equipped kitchen": ["Fully Equipped Kitchen", 1200.0],
+  "kitchen": ["Fully Equipped Kitchen", 1200.0],
+  "balcony": ["Balcony", 1200.0],
+  "fireplace": ["Fireplace", 1200.0],
+  "gym": ["Gym", 1000.0],
+  "fitness center": ["Gym", 1000.0],
+  "gym / fitness center": ["Gym", 1000.0],
+  "bbq grill": ["BBQ Grill", 900.0],
+  "bbq": ["BBQ Grill", 900.0],
+  "dedicated workspace": ["Dedicated Workspace", 800.0],
+  "workspace": ["Dedicated Workspace", 800.0],
+  "free parking": ["Free Parking", 700.0],
+  "parking": ["Free Parking", 700.0],
+  "wifi": ["WiFi", 600.0],
+  "high-speed wifi": ["WiFi", 600.0],
+  "ev charger": ["EV Charger", 800.0],
+  "pet friendly": ["Pet Friendly", 600.0],
 };
 
 /**
  * Predicts optimal nightly price in INR based on property features and seasonality.
+ * Strictly monotonic: each amenity adds its tangible market valuation.
  */
 function predictOptimalPrice({
   location = "Goa",
@@ -71,139 +103,167 @@ function predictOptimalPrice({
   isWeekend = null,
 }) {
   const cleanLoc = (location || "").trim();
-  let basePrice = 5000.0;
+  let baseLocationPrice = 5000.0;
 
-  // Exact or partial location matching
   for (const [locKey, locPrice] of Object.entries(REAL_LOCATION_BASELINES_INR)) {
     if (cleanLoc.toLowerCase().includes(locKey.toLowerCase())) {
-      basePrice = locPrice;
+      baseLocationPrice = locPrice;
       break;
     }
   }
 
-  // Category multiplier
   const catMultiplier = REAL_CATEGORY_MULTIPLIERS[category] || 1.0;
-
-  // Guest scale
   const safeGuests = Math.max(1, parseInt(guests) || 2);
-  const guestMultiplier = 1.0 + (safeGuests - 1) * 0.12;
+  const guestMultiplier = safeGuests === 1 ? 0.90 : 1.0 + (safeGuests - 2) * 0.12;
 
-  // Rating impact
-  const safeRating = Math.min(5.0, Math.max(1.0, parseFloat(rating) || 4.5));
-  const ratingMultiplier = 0.85 + (safeRating / 5.0) * 0.25;
+  const rawRating = parseFloat(rating) || 4.5;
+  const rating10 = rawRating <= 5.0 ? rawRating * 2.0 : rawRating;
+  const ratingMultiplier = Math.max(0.85, Math.min(1.25, 1.0 + (rating10 - 8.5) * 0.08));
 
-  // Amenity value sum
-  let amenityValueSum = 0;
-  const safeAmenities = Array.isArray(amenities) ? amenities : [];
-  safeAmenities.forEach((amen) => {
-    for (const [aKey, aVal] of Object.entries(REAL_AMENITY_VALUATIONS_INR)) {
-      if (amen.toLowerCase().includes(aKey.toLowerCase())) {
-        amenityValueSum += aVal * 0.4; // Weighted marginal add-on
-        break;
-      }
-    }
-  });
-
-  // Seasonality & weekend
   const now = new Date();
   const currentMonth = month != null ? parseInt(month) : now.getMonth() + 1;
   const currentIsWeekend =
     isWeekend != null
       ? Boolean(isWeekend)
-      : [0, 5, 6].includes(now.getDay()); // Fri, Sat, Sun
+      : [0, 5, 6].includes(now.getDay());
 
   let seasonalMultiplier = 1.0;
   if ([12, 1].includes(currentMonth)) {
-    seasonalMultiplier += 0.25; // Peak winter holiday demand
-  } else if ([7, 8].includes(currentMonth) && ["Goa", "Mumbai", "Kerala"].some((l) => cleanLoc.includes(l))) {
-    seasonalMultiplier -= 0.15; // Monsoon off-peak
+    seasonalMultiplier = 1.28;
+  } else if ([10, 11].includes(currentMonth) && ["udaipur", "jaipur", "jaisalmer"].some(l => cleanLoc.toLowerCase().includes(l))) {
+    seasonalMultiplier = 1.22;
+  } else if ([5, 6].includes(currentMonth) && ["shimla", "manali", "darjeeling", "rishikesh"].some(l => cleanLoc.toLowerCase().includes(l))) {
+    seasonalMultiplier = 1.25;
+  } else if ([7, 8].includes(currentMonth) && ["goa", "mumbai", "kerala"].some(l => cleanLoc.toLowerCase().includes(l))) {
+    seasonalMultiplier = 0.85;
   }
 
-  if (currentIsWeekend) {
-    seasonalMultiplier += 0.15; // Weekend getaway surge
-  }
+  const weekendMultiplier = currentIsWeekend ? 1.18 : 1.0;
 
-  // Raw predicted price calculation
-  const rawPrice = (basePrice * catMultiplier * guestMultiplier * ratingMultiplier + amenityValueSum) * seasonalMultiplier;
-  const recommendedPrice = Math.round(Math.max(500.0, rawPrice));
+  const basePrice = Math.round(
+    Math.max(500.0, baseLocationPrice * catMultiplier * guestMultiplier * ratingMultiplier * seasonalMultiplier * weekendMultiplier)
+  );
+
+  // Strictly additive, monotonic amenity valuation
+  const safeAmenities = Array.isArray(amenities) ? amenities : [];
+  const processedAmenities = new Set();
+  let amenityValueSum = 0;
+  const amenitiesBreakdown = [];
+  const amenityDrivers = [];
+
+  safeAmenities.forEach((amen) => {
+    if (!amen) return;
+    const cleanAmen = amen.trim().toLowerCase();
+    let stdName = amen.trim();
+    let val = 600.0;
+
+    if (AMENITY_ALIASES[cleanAmen]) {
+      [stdName, val] = AMENITY_ALIASES[cleanAmen];
+    } else {
+      for (const [aliasKey, [aliasStd, aliasVal]] of Object.entries(AMENITY_ALIASES)) {
+        if (cleanAmen.includes(aliasKey) || aliasKey.includes(cleanAmen)) {
+          stdName = aliasStd;
+          val = aliasVal;
+          break;
+        }
+      }
+    }
+
+    if (processedAmenities.has(stdName)) return;
+    processedAmenities.add(stdName);
+    amenityValueSum += val;
+    amenitiesBreakdown.push({
+      name: stdName,
+      raw_name: amen,
+      value_inr: val,
+    });
+    amenityDrivers.push({
+      factor: stdName,
+      impact: `+₹${Math.round(val).toLocaleString()}/night value add`,
+      type: "positive",
+    });
+  });
+
+  const recommendedPrice = Math.round(basePrice + amenityValueSum);
   const minCompetitivePrice = Math.round(recommendedPrice * 0.85);
   const maxPremiumPrice = Math.round(recommendedPrice * 1.18);
 
-  // Demand tier
+  // Demand tier and occupancy projection
   let demandTier = "Moderate";
   let projectedOccupancy = 72.0;
 
   if (
     currentIsWeekend ||
     [12, 1].includes(currentMonth) ||
-    (["Goa", "Udaipur", "Jaisalmer"].some((l) => cleanLoc.includes(l)) && [10, 11, 12, 1, 2].includes(currentMonth))
+    (["goa", "udaipur", "jaisalmer"].some(l => cleanLoc.toLowerCase().includes(l)) && [10, 11, 12, 1, 2].includes(currentMonth))
   ) {
     demandTier = "High Demand";
     projectedOccupancy = 84.5;
-  } else if ([7, 8].includes(currentMonth) && ["Goa", "Mumbai", "Kerala"].some((l) => cleanLoc.includes(l))) {
+  } else if ([7, 8].includes(currentMonth) && ["goa", "mumbai", "kerala"].some(l => cleanLoc.toLowerCase().includes(l))) {
     demandTier = "Off-Peak";
     projectedOccupancy = 55.0;
   }
 
   // Value Drivers
   const valueDrivers = [];
-  if (basePrice >= 12000.0) {
+  if (baseLocationPrice >= 12000.0) {
     valueDrivers.push({
       factor: `High-Demand Destination (${cleanLoc})`,
-      impact: "Premium Tourism Corridor",
+      impact: "Tier-1 Tourism Benchmark",
       type: "positive",
     });
-  } else if (basePrice <= 1500.0) {
+  } else {
     valueDrivers.push({
-      factor: `Emerging Market (${cleanLoc})`,
-      impact: "Competitive Local Tier",
+      factor: `Market Destination (${cleanLoc})`,
+      impact: `₹${baseLocationPrice.toLocaleString()} Base Tier`,
       type: "neutral",
     });
   }
 
-  safeAmenities.forEach((amen) => {
-    for (const [aKey, aVal] of Object.entries(REAL_AMENITY_VALUATIONS_INR)) {
-      if (amen.toLowerCase().includes(aKey.toLowerCase()) && aVal >= 1500) {
-        valueDrivers.push({
-          factor: amen,
-          impact: `+₹${Math.round(aVal).toLocaleString()}/night value add`,
-          type: "positive",
-        });
-        break;
-      }
-    }
-  });
+  if (catMultiplier > 1.0) {
+    const pctLift = Math.round((catMultiplier - 1.0) * 100);
+    valueDrivers.push({
+      factor: `${category} Accommodation`,
+      impact: `+${pctLift}% Space Factor`,
+      type: "positive",
+    });
+  }
 
   if (currentIsWeekend) {
     valueDrivers.push({
       factor: "Weekend Booking Surge",
-      impact: "+15% Dynamic Lift",
+      impact: "+18% Dynamic Lift",
       type: "positive",
     });
-  }
-  if ([12, 1].includes(currentMonth)) {
+  } else if ([12, 1].includes(currentMonth)) {
     valueDrivers.push({
       factor: "Peak Holiday Seasonality",
-      impact: "+25% Demand Surge",
+      impact: "+28% Demand Surge",
       type: "positive",
     });
   }
 
+  // Append all active amenities
+  valueDrivers.push(...amenityDrivers);
+
   return {
     recommended_price: recommendedPrice,
+    base_price: basePrice,
+    amenities_value: Math.round(amenityValueSum),
     min_competitive_price: minCompetitivePrice,
     max_premium_price: maxPremiumPrice,
     currency: "INR",
     currency_symbol: "₹",
     demand_tier: demandTier,
     projected_occupancy_rate: projectedOccupancy,
-    value_drivers: valueDrivers.slice(0, 4),
+    value_drivers: valueDrivers,
+    amenities_breakdown: amenitiesBreakdown,
     input_summary: {
       location: cleanLoc,
       category,
       guests: safeGuests,
-      rating: safeRating,
-      amenities_count: safeAmenities.length,
+      rating: rating10,
+      amenities_count: processedAmenities.size,
       month: currentMonth,
       is_weekend: currentIsWeekend,
     },

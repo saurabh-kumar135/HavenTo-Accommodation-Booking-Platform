@@ -149,9 +149,12 @@ const PricingIntelligence = () => {
   const [hoveredCategory, setHoveredCategory] = useState(null);
 
   useEffect(() => {
-    handlePredict();
     fetchHostAnalytics();
   }, []);
+
+  useEffect(() => {
+    handlePredict();
+  }, [location, category, guests, rating, selectedAmenities, month, isWeekend]);
 
   const fetchHostAnalytics = async () => {
     try {
@@ -427,11 +430,36 @@ const PricingIntelligence = () => {
                   </span>
                 </div>
 
-                <div className="flex items-baseline gap-2 mb-4">
+                <div className="flex items-baseline gap-2 mb-3">
                   <span className="text-4xl font-bold text-gray-900">
                     ₹{prediction?.recommended_price ? prediction.recommended_price.toLocaleString('en-IN') : '---'}
                   </span>
                   <span className="text-gray-500 font-medium">/ night</span>
+                </div>
+
+                {/* Rate Composition Breakdown */}
+                <div className="bg-[#FAF8F5] p-3.5 rounded-xl border border-[#EFE8DC] mb-4 space-y-2">
+                  <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Rate Composition
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-700">
+                    <span>Base Accommodation ({category}, {guests} guests)</span>
+                    <span className="font-semibold text-gray-900">
+                      ₹{((prediction?.base_price != null ? prediction.base_price : (prediction?.recommended_price - (prediction?.amenities_value || 0))) || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-700">
+                    <span>Selected Amenities ({selectedAmenities.length} selected)</span>
+                    <span className="font-semibold text-emerald-700">
+                      +₹{((prediction?.amenities_value != null ? prediction.amenities_value : 0) || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-[#E5D7C5] flex items-center justify-between text-xs font-bold text-gray-900">
+                    <span>Total Dynamic Rate / night</span>
+                    <span className="text-[#8B6F47]">
+                      ₹{(prediction?.recommended_price || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Price Range */}
@@ -453,9 +481,9 @@ const PricingIntelligence = () => {
                 {/* Value Drivers */}
                 <div>
                   <div className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-                    Key Valuation Drivers
+                    Key Valuation Drivers ({prediction?.value_drivers?.length || 0})
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                     {prediction?.value_drivers && prediction.value_drivers.length > 0 ? (
                       prediction.value_drivers.map((driver, idx) => (
                         <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-xs">
