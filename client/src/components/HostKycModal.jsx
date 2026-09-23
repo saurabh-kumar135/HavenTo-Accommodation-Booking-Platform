@@ -36,17 +36,17 @@ function checkVerhoeff(str) {
 }
 
 const HostKycModal = ({ isOpen, onClose, onSuccess }) => {
-  const { user, setUser } = useAuth();
+  const { user, isLoggedIn, setUser } = useAuth();
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState('aadhaar'); // 'aadhaar' | 'pan'
   const [aadhaarRaw, setAadhaarRaw] = useState('');
   const [aadhaarName, setAadhaarName] = useState(
-    user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : ''
+    user ? ((user.firstName || '') + ' ' + (user.lastName || '')).trim() : ''
   );
   const [panNumber, setPanNumber] = useState('');
   const [panName, setPanName] = useState(
-    user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : ''
+    user ? ((user.firstName || '') + ' ' + (user.lastName || '')).trim() : ''
   );
 
   const [loading, setLoading] = useState(false);
@@ -63,7 +63,7 @@ const HostKycModal = ({ isOpen, onClose, onSuccess }) => {
   };
 
   const getFormattedAadhaar = () => {
-    return aadhaarRaw.replace(/(\d{4})(?=\d)/g, '$1 ');
+    return (aadhaarRaw.match(/.{1,4}/g) || []).join(' ');
   };
 
   const handlePanChange = (e) => {
@@ -75,6 +75,12 @@ const HostKycModal = ({ isOpen, onClose, onSuccess }) => {
   const handleVerify = async (e) => {
     e.preventDefault();
     setError(null);
+
+    if (!isLoggedIn && !user) {
+      setError('You must be logged in to verify your identity. Please log in to your account first.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -106,8 +112,8 @@ const HostKycModal = ({ isOpen, onClose, onSuccess }) => {
           fullName: aadhaarName.trim()
         };
       } else {
-        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-        if (!panRegex.test(panNumber)) {
+        const isPanValid = panNumber.length === 10 && /^[A-Z]{5}[0-9]{4}[A-Z]/.test(panNumber);
+        if (!isPanValid) {
           setError('PAN must be 10 characters in standard format (e.g. ABCPK1234F).');
           setLoading(false);
           return;
@@ -125,9 +131,8 @@ const HostKycModal = ({ isOpen, onClose, onSuccess }) => {
       }
 
       const res = await verifyHostKyc(payload);
-      if (res.data?.success) {
+      if (res.data && res.data.success) {
         setVerifiedData(res.data.hostKyc);
-        // Update auth context
         if (setUser) {
           setUser((prev) => ({
             ...prev,
@@ -142,14 +147,29 @@ const HostKycModal = ({ isOpen, onClose, onSuccess }) => {
           }, 1500);
         }
       } else {
-        setError(res.data?.message || 'Verification failed. Please check your details.');
+        setError((res.data && res.data.message) || 'Verification failed. Please check your details.');
       }
     } catch (err) {
       console.error('KYC verification error:', err);
-      const msg =
+      if (err.response && err.response.status === 401) {
+        setError('Authentication required. Please log in to your HavenTo account first.');
+        return;
+      }
+      const detailMsg =
+        typeof err.response?.data?.detail === 'string'
+          ? err.response?.data?.detail
+          : Array.isArray(err.response?.data?.detail)
+          ? err.response?.data?.detail[0]?.msg
+          : null;
+      const serverMsg =
         err.response?.data?.message ||
-        err.response?.data?.errors?.[0] ||
-        'Verification service unavailable. Please check your information.';
+        detailMsg ||
+        err.response?.data?.errors?.[0];
+      const msg =
+        serverMsg ||
+        (err.code === 'ERR_NETWORK' || !err.response
+          ? 'Cannot connect to backend server. Please ensure the backend is running on port 3009.'
+          : 'Identity verification failed. Please check your document information.');
       setError(msg);
     } finally {
       setLoading(false);
@@ -236,27 +256,41 @@ const HostKycModal = ({ isOpen, onClose, onSuccess }) => {
                 </p>
               </div>
 
+              {/* Login Required Notice */}
+              {!isLoggedIn && !user && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-4 flex items-center justify-between text-xs text-amber-900">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">⚠️</span>
+                    <span><strong>Login required:</strong> Please sign in to link your verified Aadhaar with your host account.</span>
+                  </div>
+                  <a
+                    href="/login"
+                    className="px-3 py-1 bg-[#A67C52] hover:bg-[#8B6F47] text-white rounded-lg font-medium transition shrink-0 ml-2"
+                  >
+                    Log In
+                  </a>
+                </div>
+              )}
+
               {/* Tab Selector */}
               <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-xl mb-5">
                 <button
                   type="button"
                   onClick={() => { setActiveTab('aadhaar'); setError(null); }}
-                  className={`py-2 px-3 text-sm font-semibold rounded-lg transition-all ${
-                    activeTab === 'aadhaar'
-                      ? 'bg-white text-[#8B6F47] shadow-sm'
-                      : 'text-gray-500 hover:text-gray-800'
-                  }`}
+                  className={
+                    'py-2 px-3 text-sm font-semibold rounded-lg transition-all ' +
+                    (activeTab === 'aadhaar' ? 'bg-white text-[#8B6F47] shadow-sm' : 'text-gray-500 hover:text-gray-800')
+                  }
                 >
                   🇮🇳 Aadhaar Card
                 </button>
                 <button
                   type="button"
                   onClick={() => { setActiveTab('pan'); setError(null); }}
-                  className={`py-2 px-3 text-sm font-semibold rounded-lg transition-all ${
-                    activeTab === 'pan'
-                      ? 'bg-white text-[#8B6F47] shadow-sm'
-                      : 'text-gray-500 hover:text-gray-800'
-                  }`}
+                  className={
+                    'py-2 px-3 text-sm font-semibold rounded-lg transition-all ' +
+                    (activeTab === 'pan' ? 'bg-white text-[#8B6F47] shadow-sm' : 'text-gray-500 hover:text-gray-800')
+                  }
                 >
                   💳 PAN Card
                 </button>

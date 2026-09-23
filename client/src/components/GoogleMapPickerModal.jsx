@@ -28,30 +28,6 @@ const POPULAR_DESTINATIONS = [
   { name: 'Rishikesh, Uttarakhand', lat: 30.0869, lng: 78.2676 },
 ];
 
-// Multi-attempt Nominatim search with India country bias
-const searchNominatim = async (query) => {
-  const attempts = [
-    `${query}, India`,
-    query,
-    `${query}, Uttar Pradesh, India`,
-  ];
-  for (const q of attempts) {
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&countrycodes=in`,
-        { headers: { 'Accept-Language': 'en', 'User-Agent': 'HavenTo/1.0' } }
-      );
-      if (res.ok) {
-        const results = await res.json();
-        if (results && results.length > 0) return results[0];
-      }
-    } catch (e) {
-      console.warn('Nominatim search error:', e);
-    }
-  }
-  return null;
-};
-
 const TILE_LAYERS = {
   googleSat: {
     name: 'Satellite',
@@ -76,6 +52,33 @@ const TILE_LAYERS = {
   },
 };
 
+// Search Nominatim with multiple queries
+const searchNominatim = async (query) => {
+  const attempts = [
+    query + ', India',
+    query,
+    query + ', Uttar Pradesh, India',
+  ];
+  for (let i = 0; i < attempts.length; i++) {
+    const q = attempts[i];
+    try {
+      const res = await fetch(
+        'https://nominatim.openstreetmap.org/search?format=json&q=' +
+          encodeURIComponent(q) +
+          '&limit=5&countrycodes=in',
+        { headers: { 'Accept-Language': 'en', 'User-Agent': 'HavenTo/1.0' } }
+      );
+      if (res.ok) {
+        const results = await res.json();
+        if (results && results.length > 0) return results[0];
+      }
+    } catch (e) {
+      console.warn('Nominatim search error:', e);
+    }
+  }
+  return null;
+};
+
 const GoogleMapPickerModal = ({
   isOpen,
   onClose,
@@ -84,7 +87,6 @@ const GoogleMapPickerModal = ({
   initialLatitude = null,
   initialLongitude = null,
 }) => {
-  // All hooks MUST be declared unconditionally at the top
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [latitude, setLatitude] = useState('');
@@ -100,6 +102,17 @@ const GoogleMapPickerModal = ({
     }
   });
   const [statusMsg, setStatusMsg] = useState('');
+  // Option toggle: 'places' (human readable place view) or 'coords' (lat/lng view)
+  const [locationViewMode, setLocationViewMode] = useState('places');
+  const [placeDetails, setPlaceDetails] = useState({
+    placeName: '',
+    locality: '',
+    city: '',
+    state: '',
+    postcode: '',
+    country: 'India',
+    formattedAddress: '',
+  });
 
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -117,45 +130,110 @@ const GoogleMapPickerModal = ({
     };
   }, []);
 
-  // Reverse geocoding: zoom=18 gives building-level precision from Nominatim.
-  // Builds label from most granular field available (road → hamlet → village → town → city).
-  const reverseGeocode = async (lat, lng) => {
+  // Multi-tier reverse geocoding to resolve exact places
+  const resolvePlaceDetails = async (lat, lng) => {
+    let resolved = {
+      placeName: '',
+      locality: '',
+      city: '',
+      state: '',
+      postcode: '',
+      country: 'India',
+      formattedAddress: '',
+    };
+
+    // 1. Try Nominatim zoom 18 for building/street-level place details
     try {
-      // zoom=18 = building level, zoom=16 = street, zoom=10 = city
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        'https://nominatim.openstreetmap.org/reverse?format=json&lat=' +
+          lat +
+          '&lon=' +
+          lng +
+          '&zoom=18&addressdetails=1',
         { headers: { 'Accept-Language': 'en', 'User-Agent': 'HavenTo/1.0' } }
       );
       if (res.ok) {
         const data = await res.json();
         const addr = data.address || {};
 
-        // Build from most specific → least specific
-        const street     = addr.road || addr.pedestrian || addr.footway || '';
-        const micro      = addr.neighbourhood || addr.hamlet || addr.isolated_dwelling || '';
-        const village    = addr.village || addr.suburb || addr.quarter || '';
-        const town       = addr.town || addr.city_district || '';
-        const city       = addr.city || addr.municipality || '';
-        const district   = addr.state_district || addr.county || '';
-        const state      = addr.state || '';
+        const street = addr.road || addr.pedestrian || addr.footway || '';
+        const landmark = addr.amenity || addr.building || addr.house_name || addr.shop || '';
+        const micro = addr.neighbourhood || addr.hamlet || addr.isolated_dwelling || '';
+        const village = addr.village || addr.suburb || addr.quarter || '';
+        const town = addr.town || addr.city_district || '';
+        const city = addr.city || addr.municipality || '';
+        const district = addr.state_district || addr.county || '';
+        const state = addr.state || '';
+        const postcode = addr.postcode || '';
 
-        // Prefer: "hamlet, village/town, district, state"
-        // If no village-level data, fall back gracefully
-        const localPart  = micro || village || street || '';
-        const cityPart   = town || city || '';
-        const parts      = [localPart, cityPart || district, state].filter(Boolean);
+        const localPart = landmark || street || micro || village;
+        const areaPart = village || town || city || district;
+        const parts = [localPart, areaPart, state].filter(Boolean);
 
-        if (parts.length > 0) return parts.join(', ');
-        if (data.display_name) return data.display_name.split(',').slice(0, 4).join(', ').trim();
+        resolved = {
+          placeName: landmark || street || micro || village || 'Local Area',
+          locality: micro || village || street || '',
+          city: town || city || district || '',
+          state: state || '',
+          postcode: postcode || '',
+          country: addr.country || 'India',
+          formattedAddress:
+            parts.length > 0
+              ? parts.join(', ')
+              : data.display_name
+              ? data.display_name.split(',').slice(0, 4).join(', ').trim()
+              : '',
+        };
       }
     } catch (e) {
-      console.warn('Reverse geocode error:', e);
+      console.warn('Nominatim reverse error:', e);
     }
-    // Always fall back to showing coordinates so user knows location was captured
-    return `Near ${Number(lat).toFixed(4)}°N, ${Number(lng).toFixed(4)}°E`;
+
+    // 2. Fallback or enrich with BigDataCloud reverse geocode API if missing city/locality
+    if (!resolved.locality || !resolved.city || !resolved.formattedAddress) {
+      try {
+        const res2 = await fetch(
+          'https://api-bdc.io/data/reverse-geocode-client?latitude=' +
+            lat +
+            '&longitude=' +
+            lng +
+            '&localityLanguage=en'
+        );
+        if (res2.ok) {
+          const bdc = await res2.json();
+          const bdcLocality = bdc.locality || '';
+          const bdcCity = bdc.city || '';
+          const bdcState = bdc.principalSubdivision || '';
+          const bdcCountry = bdc.countryName || 'India';
+          const bdcPostcode = bdc.postcode || '';
+
+          const bdcParts = [bdcLocality, bdcCity, bdcState].filter(Boolean);
+          const bdcFormatted = bdcParts.join(', ');
+
+          resolved = {
+            placeName: resolved.placeName || bdcLocality || bdcCity || 'Nearby Place',
+            locality: resolved.locality || bdcLocality,
+            city: resolved.city || bdcCity,
+            state: resolved.state || bdcState,
+            postcode: resolved.postcode || bdcPostcode,
+            country: resolved.country || bdcCountry,
+            formattedAddress: resolved.formattedAddress || bdcFormatted || 'Location (' + lat + ', ' + lng + ')',
+          };
+        }
+      } catch (e2) {
+        console.warn('BigDataCloud reverse error:', e2);
+      }
+    }
+
+    if (!resolved.formattedAddress) {
+      resolved.formattedAddress = 'Location near ' + Number(lat).toFixed(4) + 'N, ' + Number(lng).toFixed(4) + 'E';
+    }
+
+    setPlaceDetails(resolved);
+    return resolved;
   };
 
-  // Helper to move marker and fly to coordinates (default zoom 18 for rooftop/satellite visibility)
+  // Helper to move marker and fly to coordinates
   const updateMapPosition = (lat, lng, zoomLevel = 18) => {
     const latNum = Number(lat);
     const lngNum = Number(lng);
@@ -165,8 +243,7 @@ const GoogleMapPickerModal = ({
     }
   };
 
-  // Detect generic country centroid (Hirdi / Maharashtra desktop fallback) or low accuracy (>10km).
-  // This is the EXACT same logic as the working Sept 19 version (commit 3106fc6).
+  // Detect generic country centroid (Hirdi/Maharashtra fallback) or coarse accuracy
   const isGenericCentroid = (lat, lng, accuracy) => {
     const latNum = Number(lat);
     const lngNum = Number(lng);
@@ -174,14 +251,13 @@ const GoogleMapPickerModal = ({
     const isNearHirdi =
       Math.abs(latNum - 20.5938) < 0.35 &&
       Math.abs(lngNum - 78.9629) < 0.35;
-    // Reject if it's the country centroid OR accuracy is worse than 10 km
     const isLowAccuracy = accuracy && accuracy > 10000;
     return isNearHirdi || isLowAccuracy;
   };
 
-  // Multi-tier IP location fallback with reverse-geocoded label
+  // IP location fallback
   const fetchIpLocation = async (reason = '') => {
-    if (reason) setStatusMsg(`📡 ${reason}…`);
+    if (reason) setStatusMsg('Connecting: ' + reason + '...');
 
     try {
       const res = await fetch('https://ipwho.is/');
@@ -191,18 +267,18 @@ const GoogleMapPickerModal = ({
           const lat = Number(data.latitude).toFixed(6);
           const lng = Number(data.longitude).toFixed(6);
           if (!isGenericCentroid(lat, lng, 0)) {
-            const betterName = await reverseGeocode(lat, lng);
+            const placeInfo = await resolvePlaceDetails(lat, lng);
             const placeName =
-              betterName ||
+              placeInfo.formattedAddress ||
               [data.city, data.region, data.country].filter(Boolean).join(', ') ||
-              `Location (${lat}, ${lng})`;
+              'Location (' + lat + ', ' + lng + ')';
             setLatitude(lat);
             setLongitude(lng);
             setSelectedLocation(placeName);
             setSearchQuery(placeName);
             setGeoError('');
             setLocating(false);
-            setStatusMsg('📍 Showing estimated network area. Drag pin to your exact house.');
+            setStatusMsg('Estimated network area detected. Tap anywhere on map to pin exact house.');
             updateMapPosition(lat, lng, 14);
             setTimeout(() => setStatusMsg(''), 5000);
             return true;
@@ -213,159 +289,146 @@ const GoogleMapPickerModal = ({
       console.warn('ipwho.is error:', e);
     }
 
-    try {
-      const res2 = await fetch('https://ipinfo.io/json');
-      if (res2.ok) {
-        const data2 = await res2.json();
-        if (data2.loc) {
-          const [ipLat, ipLng] = data2.loc.split(',');
-          if (ipLat && ipLng && !isGenericCentroid(ipLat, ipLng, 0)) {
-            const lat = Number(ipLat).toFixed(6);
-            const lng = Number(ipLng).toFixed(6);
-            const betterName = await reverseGeocode(lat, lng);
-            const placeName =
-              betterName ||
-              [data2.city, data2.region, data2.country].filter(Boolean).join(', ') ||
-              `Location (${lat}, ${lng})`;
-            setLatitude(lat);
-            setLongitude(lng);
-            setSelectedLocation(placeName);
-            setSearchQuery(placeName);
-            setGeoError('');
-            setLocating(false);
-            setStatusMsg('📍 Showing estimated network area. Drag pin to your exact house.');
-            updateMapPosition(lat, lng, 14);
-            setTimeout(() => setStatusMsg(''), 5000);
-            return true;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('ipinfo fallback error:', e);
-    }
-
     setGeoError('Could not detect your location. Type your address in the search box or click on the map.');
     setLocating(false);
     setStatusMsg('');
     return false;
   };
 
-  // GPS button — matches the EXACT working logic from Sept 19 (commit 3106fc6)
-  // Key: maximumAge: 60000 (1 min cached GPS = instant on phones), no HTTP block.
+  // Exact First-Time GPS Position Acquisition (Zero 3-Chances Requirement)
   const handleUseCurrentLocation = () => {
     setLocating(true);
     setGeoError('');
-    setStatusMsg('🛰 Getting your GPS location…');
+    setStatusMsg('Connecting to GPS satellites (high accuracy mode)...');
 
     if (!navigator.geolocation) {
-      fetchIpLocation('GPS not available, using network location');
+      fetchIpLocation('GPS not supported, using network location');
       return;
     }
 
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
+    let bestReading = null;
     let resolved = false;
 
-    // Safety fallback: if GPS takes > 12 seconds, switch to IP location
-    const fallbackTimer = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        if (watchIdRef.current !== null && navigator.geolocation) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
-          watchIdRef.current = null;
-        }
-        console.warn('GPS timed out → IP fallback');
-        fetchIpLocation('GPS timed out, using network location');
-      }
-    }, 12000);
-
-    const onLocationSuccess = async (pos) => {
+    const finalizeLocation = async (coords) => {
       if (resolved) return;
-      const rawLat = pos.coords.latitude;
-      const rawLng = pos.coords.longitude;
-      const accuracy = pos.coords.accuracy;
-
-      console.log(`GPS: lat=${rawLat}, lng=${rawLng}, accuracy=${accuracy}m`);
-
-      if (isGenericCentroid(rawLat, rawLng, accuracy)) {
-        clearTimeout(fallbackTimer);
-        resolved = true;
-        if (watchIdRef.current !== null && navigator.geolocation) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
-          watchIdRef.current = null;
-        }
-        await fetchIpLocation('GPS gave generic result, using network location');
-        return;
-      }
-
       resolved = true;
-      clearTimeout(fallbackTimer);
 
-      // Stop watching once we have a good fix (< 40m, typical phone GPS)
-      if (watchIdRef.current !== null && navigator.geolocation) {
+      if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
+      }
+      clearTimeout(maxWaitTimer);
+
+      const rawLat = coords.latitude;
+      const rawLng = coords.longitude;
+      const accuracy = coords.accuracy || 10;
+
+      if (isGenericCentroid(rawLat, rawLng, accuracy)) {
+        await fetchIpLocation('GPS gave generic result, using network location');
+        return;
       }
 
       const lat = rawLat.toFixed(6);
       const lng = rawLng.toFixed(6);
       setLatitude(lat);
       setLongitude(lng);
-      setStatusMsg(accuracy <= 30 ? '🎯 Locked onto exact GPS position!' : `📍 GPS accuracy ~${Math.round(accuracy)}m`);
 
-      const placeName = await reverseGeocode(lat, lng);
-      setSelectedLocation(placeName);
-      setSearchQuery(placeName);
+      const placeInfo = await resolvePlaceDetails(lat, lng);
+      setSelectedLocation(placeInfo.formattedAddress);
+      setSearchQuery(placeInfo.formattedAddress);
       setLocating(false);
 
-      // Satellite zoom: 18–19 shows individual building rooftop
-      const zoom = accuracy <= 35 ? 19 : accuracy <= 150 ? 18 : accuracy <= 1000 ? 16 : 14;
+      const zoom = accuracy <= 25 ? 19 : accuracy <= 60 ? 18 : accuracy <= 200 ? 17 : 15;
       updateMapPosition(lat, lng, zoom);
 
-      setTimeout(() => setStatusMsg(''), 4500);
+      if (accuracy <= 30) {
+        setStatusMsg('Exact rooftop GPS locked (accuracy ~' + Math.round(accuracy) + 'm)');
+      } else {
+        setStatusMsg('GPS location locked (~' + Math.round(accuracy) + 'm accuracy)');
+      }
+      setTimeout(() => setStatusMsg(''), 5000);
     };
 
-    const onLocationError = (err) => {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(fallbackTimer);
-      if (watchIdRef.current !== null && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
+    // Timeout: if accuracy does not drop below 25m within 5.5 seconds, use best reading seen
+    const maxWaitTimer = setTimeout(() => {
+      if (!resolved) {
+        if (bestReading) {
+          finalizeLocation(bestReading);
+        } else {
+          resolved = true;
+          if (watchIdRef.current !== null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+          }
+          fetchIpLocation('GPS timeout, using network location');
+        }
       }
-      console.warn('GPS error:', err?.code, err?.message);
+    }, 5500);
 
-      if (err?.code === 1) {
+    const onWatchPos = (pos) => {
+      if (resolved) return;
+      const coords = pos.coords;
+      const acc = coords.accuracy;
+
+      if (!bestReading || acc < bestReading.accuracy) {
+        bestReading = coords;
+      }
+
+      // If accuracy <= 25m, this is a true satellite fix on mobile phone; finalize immediately!
+      if (acc <= 25) {
+        finalizeLocation(coords);
+      } else {
+        setStatusMsg('Acquiring satellite lock... Accuracy ~' + Math.round(acc) + 'm (refining)');
+      }
+    };
+
+    const onWatchError = (err) => {
+      if (resolved) return;
+      if (err && err.code === 1) {
         // PERMISSION_DENIED
+        resolved = true;
+        clearTimeout(maxWaitTimer);
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
         setLocating(false);
         setStatusMsg('');
-        setGeoError('Location permission denied. Please allow location access in your phone browser settings.');
+        setGeoError('Location permission denied. Please allow location access in your browser settings.');
         return;
       }
-      fetchIpLocation('GPS unavailable, using network location');
+      if (bestReading) {
+        finalizeLocation(bestReading);
+      } else {
+        resolved = true;
+        clearTimeout(maxWaitTimer);
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
+        fetchIpLocation('GPS unavailable, using network location');
+      }
     };
 
-    // maximumAge: 60000 = use phone GPS cache up to 1 minute old.
-    // On phones with location ON, this returns the hardware GPS in < 300ms.
-    // This is IDENTICAL to what worked on Sept 19.
-    navigator.geolocation.getCurrentPosition(
-      onLocationSuccess,
-      (err) => {
-        if (err?.code === 1) {
-          onLocationError(err);
-          return;
+    try {
+      // maximumAge: 0 forces browser to query live hardware GPS directly with no stale cache
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        onWatchPos,
+        onWatchError,
+        {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 0,
         }
-        // Weak signal: watch for GPS satellite lock up to 12 more seconds
-        try {
-          watchIdRef.current = navigator.geolocation.watchPosition(
-            onLocationSuccess,
-            onLocationError,
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-          );
-        } catch (watchErr) {
-          onLocationError(err);
-        }
-      },
-      { enableHighAccuracy: true, timeout: 9000, maximumAge: 60000 }
-    );
+      );
+    } catch (e) {
+      fetchIpLocation('GPS error, using network location');
+    }
   };
 
   // Address search with multi-attempt and India bias
@@ -382,33 +445,35 @@ const GoogleMapPickerModal = ({
     if (result) {
       const lat = Number(result.lat).toFixed(6);
       const lng = Number(result.lon).toFixed(6);
-      const betterName = await reverseGeocode(lat, lng);
+      const placeInfo = await resolvePlaceDetails(lat, lng);
       setLatitude(lat);
       setLongitude(lng);
-      setSelectedLocation(betterName || result.display_name || q);
-      setSearchQuery(betterName || result.display_name || q);
+      const placeName = placeInfo.formattedAddress || result.display_name || q;
+      setSelectedLocation(placeName);
+      setSearchQuery(placeName);
       setSearching(false);
       updateMapPosition(lat, lng, 18);
     } else {
-      setGeoError(`"${q}" was not found. Try a nearby city (e.g. "Bijnor") or click on the map to pin manually.`);
+      setGeoError('"' + q + '" was not found. Try a nearby city or click on the map to pin manually.');
       setSelectedLocation(q);
       setSearching(false);
     }
   };
 
   // Handle popular destination chip click
-  const handleSelectPopular = (dest) => {
+  const handleSelectPopular = async (dest) => {
     const lat = String(dest.lat);
     const lng = String(dest.lng);
-    setSelectedLocation(dest.name);
-    setSearchQuery(dest.name);
     setLatitude(lat);
     setLongitude(lng);
+    setSelectedLocation(dest.name);
+    setSearchQuery(dest.name);
     setGeoError('');
     updateMapPosition(lat, lng, 16);
+    await resolvePlaceDetails(lat, lng);
   };
 
-  // Switch map layer (Satellite, Google Road, OpenStreetMap)
+  // Switch map layer
   const handleSwitchLayer = (type) => {
     setMapLayerType(type);
     try {
@@ -426,13 +491,14 @@ const GoogleMapPickerModal = ({
   };
 
   // Handle coordinates manual input change
-  const handleManualCoordChange = (newLat, newLng) => {
+  const handleManualCoordChange = async (newLat, newLng) => {
     setLatitude(newLat);
     setLongitude(newLng);
     const latNum = parseFloat(newLat);
     const lngNum = parseFloat(newLng);
     if (!isNaN(latNum) && !isNaN(lngNum) && latNum >= -90 && latNum <= 90 && lngNum >= -180 && lngNum <= 180) {
       updateMapPosition(latNum, lngNum, 18);
+      await resolvePlaceDetails(String(latNum), String(lngNum));
     }
   };
 
@@ -458,6 +524,9 @@ const GoogleMapPickerModal = ({
     setLongitude(initialLongitude != null ? String(initialLongitude) : String(initLng));
     setGeoError('');
 
+    // Pre-resolve initial location places details
+    resolvePlaceDetails(String(initLat), String(initLng));
+
     const timer = setTimeout(() => {
       if (!mapContainerRef.current) return;
 
@@ -476,28 +545,36 @@ const GoogleMapPickerModal = ({
         }).addTo(map);
 
         const marker = L.marker([initLat, initLng], { draggable: true }).addTo(map);
-        marker.bindPopup('<b>📍 Home Location</b><br/>Drag or click map to move pin').openPopup();
+        marker.bindPopup('<b>Home Location</b><br/>Drag or click map to move pin').openPopup();
 
+        // Pin Drag Handling: Update exact place details
         marker.on('dragend', async () => {
           const pos = marker.getLatLng();
           const lat = pos.lat.toFixed(6);
           const lng = pos.lng.toFixed(6);
           setLatitude(lat);
           setLongitude(lng);
-          const name = await reverseGeocode(lat, lng);
-          setSelectedLocation(name);
-          setSearchQuery(name);
+          setStatusMsg('Identifying place details...');
+          const placeInfo = await resolvePlaceDetails(lat, lng);
+          setSelectedLocation(placeInfo.formattedAddress);
+          setSearchQuery(placeInfo.formattedAddress);
+          setStatusMsg('Pinned at: ' + placeInfo.formattedAddress);
+          setTimeout(() => setStatusMsg(''), 4000);
         });
 
+        // Map Click Handling: Move pin to exact clicked point & show exact place
         map.on('click', async (e) => {
           const lat = e.latlng.lat.toFixed(6);
           const lng = e.latlng.lng.toFixed(6);
           marker.setLatLng([lat, lng]);
           setLatitude(lat);
           setLongitude(lng);
-          const name = await reverseGeocode(lat, lng);
-          setSelectedLocation(name);
-          setSearchQuery(name);
+          setStatusMsg('Identifying exact place on map...');
+          const placeInfo = await resolvePlaceDetails(lat, lng);
+          setSelectedLocation(placeInfo.formattedAddress);
+          setSearchQuery(placeInfo.formattedAddress);
+          setStatusMsg('Pinned at: ' + placeInfo.formattedAddress);
+          setTimeout(() => setStatusMsg(''), 4000);
         });
 
         mapInstanceRef.current = map;
@@ -523,12 +600,13 @@ const GoogleMapPickerModal = ({
     onClose();
   };
 
-  // Safe early return AFTER all hooks
   if (!isOpen) return null;
 
-  const externalGoogleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    latitude && longitude ? `${latitude},${longitude}` : selectedLocation || 'India'
-  )}`;
+  // Exact Google Maps location query URL (drops pin at exact coordinate location)
+  const externalGoogleMapsUrl =
+    latitude && longitude
+      ? 'https://www.google.com/maps?q=' + latitude + ',' + longitude + '&z=19'
+      : 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(selectedLocation || 'India');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs transition-opacity animate-fadeIn">
@@ -574,7 +652,7 @@ const GoogleMapPickerModal = ({
               type="submit"
               disabled={searching}
               className="px-3.5 py-2.5 bg-[#A67C52] hover:bg-[#8B6F47] disabled:opacity-60 text-white text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shrink-0 cursor-pointer"
-              title="Search and pinpoint address"
+              title="Search address"
             >
               {searching ? (
                 <>
@@ -592,19 +670,20 @@ const GoogleMapPickerModal = ({
               type="button"
               onClick={handleUseCurrentLocation}
               disabled={locating}
-              className="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl transition flex items-center gap-1 shrink-0 cursor-pointer"
-              title="Auto-detect exact GPS location on your phone"
+              className="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs"
+              title="Auto-detect exact GPS location on the first tap"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 ${locating ? 'animate-spin' : ''}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={'w-4 h-4 ' + (locating ? 'animate-spin' : '')}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
               </svg>
-              <span>{locating ? 'Locating...' : 'GPS'}</span>
+              <span>{locating ? 'Locking GPS...' : 'GPS'}</span>
             </button>
           </form>
 
           {statusMsg && (
-            <p className="text-xs text-blue-600 font-medium bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1.5">
+            <p className="text-xs text-blue-700 font-medium bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1.5 animate-fadeIn">
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping shrink-0" />
               <span>{statusMsg}</span>
             </p>
           )}
@@ -615,24 +694,21 @@ const GoogleMapPickerModal = ({
             </p>
           )}
 
-          <p className="text-[10px] text-gray-400 leading-relaxed">
-            💡 <strong>Phone Tip:</strong> Make sure Location/GPS is ON and allowed in your browser. In <strong>🛰 Satellite mode</strong>, the map will zoom directly into your exact building/house rooftop. You can also drag the 📍 pin to adjust.
-          </p>
-
           {/* Quick Suggestions & Layer Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-1.5 items-center">
               <span className="text-[11px] text-gray-500 font-medium">Quick:</span>
-              {POPULAR_DESTINATIONS.slice(0, 6).map((dest) => (
+              {POPULAR_DESTINATIONS.slice(0, 5).map((dest) => (
                 <button
                   key={dest.name}
                   type="button"
                   onClick={() => handleSelectPopular(dest)}
-                  className={`text-[10px] px-2 py-0.5 rounded-md border transition font-medium cursor-pointer ${
-                    selectedLocation === dest.name
+                  className={
+                    'text-[10px] px-2 py-0.5 rounded-md border transition font-medium cursor-pointer ' +
+                    (selectedLocation === dest.name
                       ? 'bg-[#A67C52] text-white border-[#A67C52]'
-                      : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
-                  }`}
+                      : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200')
+                  }
                 >
                   {dest.name.split(',')[0]}
                 </button>
@@ -644,29 +720,32 @@ const GoogleMapPickerModal = ({
               <button
                 type="button"
                 onClick={() => handleSwitchLayer('googleSat')}
-                className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
-                  mapLayerType === 'googleSat' ? 'bg-[#A67C52] text-white shadow-xs font-bold' : 'text-gray-600 hover:text-gray-900'
-                }`}
+                className={
+                  'px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ' +
+                  (mapLayerType === 'googleSat' ? 'bg-[#A67C52] text-white shadow-xs font-bold' : 'text-gray-600 hover:text-gray-900')
+                }
                 title="Google Satellite imagery with street labels"
               >
-                <span>🛰 Satellite</span>
+                <span>Satellite</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleSwitchLayer('googleRoad')}
-                className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
-                  mapLayerType === 'googleRoad' ? 'bg-[#A67C52] text-white shadow-xs font-bold' : 'text-gray-600 hover:text-gray-900'
-                }`}
+                className={
+                  'px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ' +
+                  (mapLayerType === 'googleRoad' ? 'bg-[#A67C52] text-white shadow-xs font-bold' : 'text-gray-600 hover:text-gray-900')
+                }
                 title="Google standard map"
               >
-                <span>🗺 Map</span>
+                <span>Map</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleSwitchLayer('osm')}
-                className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
-                  mapLayerType === 'osm' ? 'bg-[#A67C52] text-white shadow-xs font-bold' : 'text-gray-600 hover:text-gray-900'
-                }`}
+                className={
+                  'px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ' +
+                  (mapLayerType === 'osm' ? 'bg-[#A67C52] text-white shadow-xs font-bold' : 'text-gray-600 hover:text-gray-900')
+                }
                 title="OpenStreetMap view"
               >
                 <span>OSM</span>
@@ -680,8 +759,7 @@ const GoogleMapPickerModal = ({
 
             {/* Hint overlay on top-left of map */}
             <div className="absolute top-2.5 left-12 z-20 pointer-events-none bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-md shadow-xs border border-gray-200 text-[11px] text-gray-700 flex items-center gap-1.5 font-medium">
-              <span>{mapLayerType === 'googleSat' ? '🛰' : '📍'}</span>
-              <span>{mapLayerType === 'googleSat' ? 'Satellite View: Click or drag pin to your exact rooftop' : 'Click or drag pin to your exact house'}</span>
+              <span>{mapLayerType === 'googleSat' ? 'Satellite View: Click or drag pin to exact rooftop' : 'Click or drag pin to exact house'}</span>
             </div>
 
             {/* Direct Open in Google Maps Link */}
@@ -689,68 +767,180 @@ const GoogleMapPickerModal = ({
               href={externalGoogleMapsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="absolute bottom-2.5 right-2.5 z-20 bg-white/90 hover:bg-white text-gray-800 text-[10px] font-bold px-2 py-1 rounded shadow-xs border border-gray-200 transition flex items-center gap-1"
-              title="Open coordinates directly in Google Maps"
+              className="absolute bottom-2.5 right-2.5 z-20 bg-white/95 hover:bg-white text-gray-800 text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow-md border border-gray-200 transition flex items-center gap-1.5"
+              title="Open this exact location in Google Maps"
             >
+              <svg className="w-3.5 h-3.5 fill-current text-rose-600" viewBox="0 0 24 24">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+              </svg>
               <span>Open in Google Maps</span>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3 text-gray-500">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
               </svg>
             </a>
           </div>
 
-          {/* Coordinates Details Row */}
-          <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs flex flex-wrap items-center justify-between gap-3">
-            <div className="max-w-[280px]">
-              <span className="text-[11px] text-gray-500 block">Selected Destination:</span>
-              <span className="font-bold text-gray-800 text-xs sm:text-sm line-clamp-1">
-                {selectedLocation || searchQuery || 'Not selected'}
+          {/* Location Mode Switcher Option: Places View vs Coordinates View */}
+          <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-2.5">
+            <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+              <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                <span>Location Display:</span>
               </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div>
-                <label className="text-[10px] text-gray-500 block">Latitude</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 27.1833"
-                  value={latitude}
-                  onChange={(e) => handleManualCoordChange(e.target.value, longitude)}
-                  className="w-24 px-2 py-1 text-xs border rounded bg-white font-mono"
-                />
+              <div className="flex items-center bg-gray-200 p-0.5 rounded-lg text-[11px] font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setLocationViewMode('places')}
+                  className={
+                    'px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ' +
+                    (locationViewMode === 'places' ? 'bg-white text-gray-900 shadow-xs font-bold' : 'text-gray-600 hover:text-gray-900')
+                  }
+                >
+                  <span>Show as Places</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocationViewMode('coords')}
+                  className={
+                    'px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ' +
+                    (locationViewMode === 'coords' ? 'bg-white text-gray-900 shadow-xs font-bold' : 'text-gray-600 hover:text-gray-900')
+                  }
+                >
+                  <span>Coordinates</span>
+                </button>
               </div>
-              <div>
-                <label className="text-[10px] text-gray-500 block">Longitude</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 78.0167"
-                  value={longitude}
-                  onChange={(e) => handleManualCoordChange(latitude, e.target.value)}
-                  className="w-24 px-2 py-1 text-xs border rounded bg-white font-mono"
-                />
-              </div>
             </div>
+
+            {/* Option 1: Places Mode View */}
+            {locationViewMode === 'places' ? (
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 block">
+                      Resolved Place Name:
+                    </span>
+                    <p className="font-bold text-gray-800 text-xs sm:text-sm leading-snug">
+                      {selectedLocation || searchQuery || 'Click on the map to detect place'}
+                    </p>
+                  </div>
+                  <a
+                    href={externalGoogleMapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-[11px] font-semibold text-rose-600 hover:text-rose-700 underline flex items-center gap-1 pt-1"
+                  >
+                    <span>View in Google Maps</span>
+                  </a>
+                </div>
+
+                {/* Detected Place Breakdown Chips */}
+                {(placeDetails.locality || placeDetails.city || placeDetails.state) && (
+                  <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] text-gray-500 font-medium">Place details:</span>
+                    {placeDetails.locality && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = [placeDetails.locality, placeDetails.city, placeDetails.state].filter(Boolean).join(', ');
+                          setSelectedLocation(val);
+                          setSearchQuery(val);
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium hover:bg-emerald-100 transition"
+                        title="Click to set this locality"
+                      >
+                        Area: {placeDetails.locality}
+                      </button>
+                    )}
+                    {placeDetails.city && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = [placeDetails.city, placeDetails.state].filter(Boolean).join(', ');
+                          setSelectedLocation(val);
+                          setSearchQuery(val);
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium hover:bg-blue-100 transition"
+                        title="Click to set this city"
+                      >
+                        City: {placeDetails.city}
+                      </button>
+                    )}
+                    {placeDetails.state && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-medium">
+                        State: {placeDetails.state}
+                      </span>
+                    )}
+                    {placeDetails.postcode && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium font-mono">
+                        PIN: {placeDetails.postcode}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Option 2: Coordinates View */
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <div>
+                  <span className="text-[10px] text-gray-400 block font-semibold uppercase">Exact Destination:</span>
+                  <span className="font-semibold text-gray-700 text-xs line-clamp-1">
+                    {selectedLocation || 'Not selected'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div>
+                    <label className="text-[10px] text-gray-500 block">Latitude</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 27.1833"
+                      value={latitude}
+                      onChange={(e) => handleManualCoordChange(e.target.value, longitude)}
+                      className="w-24 px-2 py-1 text-xs border rounded bg-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 block">Longitude</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 78.0167"
+                      value={longitude}
+                      onChange={(e) => handleManualCoordChange(latitude, e.target.value)}
+                      className="w-24 px-2 py-1 text-xs border rounded bg-white font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Modal Footer */}
-        <div className="px-5 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-100 text-xs font-semibold rounded-xl transition cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            className="px-5 py-2 bg-[#A67C52] hover:bg-[#8B6F47] text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+        <div className="px-5 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-3">
+          <div className="text-[11px] text-gray-500 flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5 text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
             </svg>
-            <span>Confirm Location</span>
-          </button>
+            <span className="line-clamp-1">{selectedLocation ? 'Selected: ' + selectedLocation : 'Ready to confirm'}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-100 text-xs font-semibold rounded-xl transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              className="px-5 py-2 bg-[#A67C52] hover:bg-[#8B6F47] text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+              </svg>
+              <span>Confirm Location</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

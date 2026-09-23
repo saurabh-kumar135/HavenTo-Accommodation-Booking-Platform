@@ -64,6 +64,12 @@ const AddEditHome = () => {
     }
   }, [homeId]);
 
+  useEffect(() => {
+    if (!isEditing && user && !user?.hostKyc?.isVerified) {
+      setIsKycModalOpen(true);
+    }
+  }, [isEditing, user]);
+
   const fetchHomeData = async () => {
     try {
       const response = await getEditHome(homeId);

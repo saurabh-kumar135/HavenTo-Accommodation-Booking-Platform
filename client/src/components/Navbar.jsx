@@ -122,19 +122,42 @@ const Navbar = ({ currentPage }) => {
                       </Link>
                     </li>
                     <li>
-                      <Link
-                        to="/host/add-home"
-                        className={`${currentPage === 'addHome' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-4 rounded-lg transition duration-300 flex items-center`}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mr-1">
-                          <path fillRule="evenodd" d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z" clipRule="evenodd" />
-                        </svg>
-                        Add Home
-                      </Link>
+                      {user?.hostKyc?.isVerified ? (
+                        <Link
+                          to="/host/add-home"
+                          className={
+                            (currentPage === 'addHome' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]') +
+                            ' py-2 px-4 rounded-lg transition duration-300 flex items-center'
+                          }
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mr-1">
+                            <path fillRule="evenodd" d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z" clipRule="evenodd" />
+                          </svg>
+                          Add Home
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsKycModalOpen(true);
+                            showToast('Host identity verification required: Please verify your Aadhaar or PAN card before adding a home.', 'warning');
+                          }}
+                          className={
+                            (currentPage === 'addHome' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]') +
+                            ' py-2 px-4 rounded-lg transition duration-300 flex items-center cursor-pointer'
+                          }
+                          title="Verify identity (Aadhaar / PAN) to add home"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mr-1">
+                            <path fillRule="evenodd" d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z" clipRule="evenodd" />
+                          </svg>
+                          Add Home
+                        </button>
+                      )}
                     </li>
                     <li className="flex items-center ml-1">
                       {user?.hostKyc?.isVerified ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-full shadow-sm" title={`Verified with ${user.hostKyc.documentType?.toUpperCase()} (${user.hostKyc.maskedNumber})`}>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-full shadow-sm" title={'Verified with ' + (user.hostKyc.documentType || '').toUpperCase() + ' (' + (user.hostKyc.maskedNumber || '') + ')'}>
                           <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM13.707 8.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                           </svg>
@@ -253,9 +276,23 @@ const Navbar = ({ currentPage }) => {
                           </Link>
                         </li>
                         <li>
-                          <Link to="/host/add-home" className={`${currentPage === 'addHome' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-3 rounded-lg flex items-center`}>
-                            Add Home
-                          </Link>
+                          {user?.hostKyc?.isVerified ? (
+                            <Link to="/host/add-home" className={(currentPage === 'addHome' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]') + ' py-2 px-3 rounded-lg flex items-center'}>
+                              Add Home
+                            </Link>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileMenuOpen(false);
+                                setIsKycModalOpen(true);
+                                showToast('Host identity verification required: Please verify your Aadhaar or PAN card before adding a home.', 'warning');
+                              }}
+                              className={(currentPage === 'addHome' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]') + ' py-2 px-3 rounded-lg flex items-center w-full text-left cursor-pointer'}
+                            >
+                              Add Home
+                            </button>
+                          )}
                         </li>
                       </>
                     )}
