@@ -298,6 +298,7 @@ exports.postVerifyKyc = async (req, res, next) => {
     user.hostKyc = {
       isVerified: true,
       documentType: verification.documentType,
+      documentNumber: verification.documentNumber,
       maskedNumber: verification.maskedNumber,
       documentHash: verification.documentHash,
       fullNameAsOnDoc: verification.fullNameAsOnDoc,

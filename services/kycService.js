@@ -169,6 +169,7 @@ async function verifyHostIdentity({ documentType, documentNumber, fullName }) {
     return {
       success: true,
       documentType: 'aadhaar',
+      documentNumber: result.cleanNumber,
       maskedNumber: result.maskedNumber,
       documentHash: result.documentHash,
       fullNameAsOnDoc: result.fullName,
@@ -182,6 +183,7 @@ async function verifyHostIdentity({ documentType, documentNumber, fullName }) {
     return {
       success: true,
       documentType: 'pan',
+      documentNumber: result.cleanNumber,
       maskedNumber: result.maskedNumber,
       documentHash: result.documentHash,
       fullNameAsOnDoc: result.fullName,

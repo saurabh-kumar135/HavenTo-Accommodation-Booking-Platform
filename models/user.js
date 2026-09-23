@@ -78,6 +78,7 @@ const userSchema = mongoose.Schema({
       enum: ['aadhaar', 'pan', null],
       default: null
     },
+    documentNumber: String,
     maskedNumber: String,
     documentHash: String,
     fullNameAsOnDoc: String,
