@@ -72,4 +72,7 @@ export const getMarketOverview = () => api.get('/api/analytics/market/overview')
 export const verifyHostKyc = (data) => api.post('/api/host/verify-kyc', data);
 export const getHostKycStatus = () => api.get('/api/host/kyc-status');
 
+// Host Wealth & Revenue Analytics
+export const getHostWealthAnalytics = () => api.get('/api/host/wealth-analytics');
+
 export default api;

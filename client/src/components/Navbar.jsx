@@ -88,11 +88,9 @@ const Navbar = ({ currentPage }) => {
                     <li>
                       <button
                         onClick={() => setIsKycModalOpen(true)}
-                        className="hover:bg-[#C4A57B] bg-white/20 py-2 px-3 rounded-lg transition duration-300 flex items-center gap-1.5 text-xs font-semibold border border-white/40 shadow-sm"
-                        title="Verify Aadhaar or PAN to become a verified Host"
+                        className="hover:bg-[#C4A57B] py-2 px-4 rounded-lg transition duration-300 flex items-center text-sm"
                       >
-                        <span className="text-sm">🇮🇳</span>
-                        <span>Become a Host</span>
+                        Become a Host
                       </button>
                     </li>
                   </>
@@ -113,12 +111,25 @@ const Navbar = ({ currentPage }) => {
                     <li>
                       <Link
                         to="/host/pricing-intelligence"
-                        className={`${currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-4 rounded-lg transition duration-300 flex items-center`}
+                        className={(currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]') + ' py-2 px-4 rounded-lg transition duration-300 flex items-center'}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mr-1">
                           <path d="M18.375 2.25c-1.035 0-1.875.84-1.875 1.875v15.75c0 1.035.84 1.875 1.875 1.875h.75c1.035 0 1.875-.84 1.875-1.875V4.125c0-1.036-.84-1.875-1.875-1.875h-.75zM9.75 8.625c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v11.25c0 1.035-.84 1.875-1.875 1.875h-.75a1.875 1.875 0 01-1.875-1.875V8.625zM3 13.125c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v6.75c0 1.035-.84 1.875-1.875 1.875h-.75A1.875 1.875 0 013 19.875v-6.75z" />
                         </svg>
                         Revenue Insights
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        to="/host/wealth"
+                        className={(currentPage === 'host-wealth' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]') + ' py-2 px-4 rounded-lg transition duration-300 flex items-center'}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mr-1">
+                          <path d="M12 7.5a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Z" />
+                          <path fillRule="evenodd" d="M1.5 4.875C1.5 3.839 2.34 3 3.375 3h17.25c1.035 0 1.875.84 1.875 1.875v9.75c0 1.036-.84 1.875-1.875 1.875H3.375A1.875 1.875 0 0 1 1.5 14.625v-9.75ZM8.25 9.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0ZM18.75 9a.75.75 0 0 0-.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 0 0 .75-.75V9.75a.75.75 0 0 0-.75-.75h-.008ZM4.5 9.75A.75.75 0 0 1 5.25 9h.008a.75.75 0 0 1 .75.75v.008a.75.75 0 0 1-.75.75H5.25a.75.75 0 0 1-.75-.75V9.75Z" clipRule="evenodd" />
+                          <path d="M2.25 18a.75.75 0 0 0 0 1.5c5.4 0 10.63.722 15.6 2.075 1.19.324 2.4-.558 2.4-1.82V18.75a.75.75 0 0 0-.75-.75H2.25Z" />
+                        </svg>
+                        Host Earnings
                       </Link>
                     </li>
                     <li>
@@ -140,36 +151,17 @@ const Navbar = ({ currentPage }) => {
                           type="button"
                           onClick={() => {
                             setIsKycModalOpen(true);
-                            showToast('Host identity verification required: Please verify your Aadhaar or PAN card before adding a home.', 'warning');
+                            showToast('Please complete host verification to add a home.', 'info');
                           }}
                           className={
                             (currentPage === 'addHome' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]') +
                             ' py-2 px-4 rounded-lg transition duration-300 flex items-center cursor-pointer'
                           }
-                          title="Verify identity (Aadhaar / PAN) to add home"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mr-1">
                             <path fillRule="evenodd" d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z" clipRule="evenodd" />
                           </svg>
                           Add Home
-                        </button>
-                      )}
-                    </li>
-                    <li className="flex items-center ml-1">
-                      {user?.hostKyc?.isVerified ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-full shadow-sm" title={'Verified with ' + (user.hostKyc.documentType || '').toUpperCase() + ' (' + (user.hostKyc.maskedNumber || '') + ')'}>
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM13.707 8.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                          Verified Host
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => setIsKycModalOpen(true)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-full shadow-sm animate-pulse transition"
-                          title="Verify Aadhaar or PAN to list homes"
-                        >
-                          <span>⚠️ Verify ID (Aadhaar/PAN)</span>
                         </button>
                       )}
                     </li>
@@ -271,8 +263,18 @@ const Navbar = ({ currentPage }) => {
                           </Link>
                         </li>
                         <li>
-                          <Link to="/host/pricing-intelligence" className={`${currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-3 rounded-lg flex items-center`}>
+                          <Link to="/host/pricing-intelligence" className={(currentPage === 'pricing' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]') + ' py-2 px-3 rounded-lg flex items-center'}>
                             Revenue Insights
+                          </Link>
+                        </li>
+                        <li>
+                          <Link to="/host/wealth" className={(currentPage === 'host-wealth' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]') + ' py-2 px-3 rounded-lg flex items-center'}>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mr-1.5">
+                              <path d="M12 7.5a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Z" />
+                              <path fillRule="evenodd" d="M1.5 4.875C1.5 3.839 2.34 3 3.375 3h17.25c1.035 0 1.875.84 1.875 1.875v9.75c0 1.036-.84 1.875-1.875 1.875H3.375A1.875 1.875 0 0 1 1.5 14.625v-9.75ZM8.25 9.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0ZM18.75 9a.75.75 0 0 0-.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 0 0 .75-.75V9.75a.75.75 0 0 0-.75-.75h-.008ZM4.5 9.75A.75.75 0 0 1 5.25 9h.008a.75.75 0 0 1 .75.75v.008a.75.75 0 0 1-.75.75H5.25a.75.75 0 0 1-.75-.75V9.75Z" clipRule="evenodd" />
+                              <path d="M2.25 18a.75.75 0 0 0 0 1.5c5.4 0 10.63.722 15.6 2.075 1.19.324 2.4-.558 2.4-1.82V18.75a.75.75 0 0 0-.75-.75H2.25Z" />
+                            </svg>
+                            Host Earnings
                           </Link>
                         </li>
                         <li>
@@ -286,7 +288,7 @@ const Navbar = ({ currentPage }) => {
                               onClick={() => {
                                 setMobileMenuOpen(false);
                                 setIsKycModalOpen(true);
-                                showToast('Host identity verification required: Please verify your Aadhaar or PAN card before adding a home.', 'warning');
+                                showToast('Please complete host verification to add a home.', 'info');
                               }}
                               className={(currentPage === 'addHome' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]') + ' py-2 px-3 rounded-lg flex items-center w-full text-left cursor-pointer'}
                             >
@@ -307,19 +309,12 @@ const Navbar = ({ currentPage }) => {
                           onClick={() => { setMobileMenuOpen(false); setIsKycModalOpen(true); }}
                           className="w-full text-center py-2 px-3 bg-white text-[#8B6F47] font-semibold text-xs rounded-lg shadow"
                         >
-                          🇮🇳 Become a Host (Verify ID)
+                          Become a Host
                         </button>
-                      ) : user?.hostKyc?.isVerified ? (
-                        <div className="text-center text-xs text-emerald-100 font-semibold py-1">
-                          🛡️ Verified Host ({user.hostKyc.documentType?.toUpperCase()})
-                        </div>
                       ) : (
-                        <button
-                          onClick={() => { setMobileMenuOpen(false); setIsKycModalOpen(true); }}
-                          className="w-full text-center py-2 px-3 bg-amber-500 text-white font-semibold text-xs rounded-lg shadow"
-                        >
-                          ⚠️ Complete Host KYC (Aadhaar / PAN)
-                        </button>
+                        <div className="text-center text-xs text-white/90 font-medium py-1">
+                          Host Account ({user?.firstName})
+                        </div>
                       )}
                     </li>
                   </>

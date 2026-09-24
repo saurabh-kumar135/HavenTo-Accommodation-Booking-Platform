@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const jwt = require('jsonwebtoken');
 const Home = require("../models/home");
+const Booking = require("../models/booking");
 const User = require("../models/user");
 const fs = require("fs");
 const kycService = require("../services/kycService");
@@ -351,3 +352,123 @@ exports.getKycStatus = async (req, res, next) => {
     userType: user.userType,
   });
 };
+
+exports.getHostWealthAnalytics = async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    
+    let hostHomes = [];
+    if (user && user._id) {
+      hostHomes = await Home.find({ hostId: user._id }).lean();
+    }
+    
+    const isDemoPortfolio = hostHomes.length === 0;
+    const targetHomes = isDemoPortfolio ? await Home.find().limit(6).lean() : hostHomes;
+    const targetHomeIds = targetHomes.map(h => h._id.toString());
+    
+    const allBookings = await Booking.find()
+      .populate('user', 'firstName lastName email name')
+      .populate('home', 'houseName location price photoUrl')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    const relevantBookings = allBookings.filter(b => {
+      if (!b.home) return false;
+      const homeId = (b.home._id || b.home).toString();
+      return targetHomeIds.includes(homeId);
+    });
+    
+    const confirmedBookings = relevantBookings.filter(b => b.status === 'confirmed');
+    
+    let totalGrossRevenue = 0;
+    let totalNightsBooked = 0;
+    
+    const enrichedBookings = confirmedBookings.map(b => {
+      let nights = 2;
+      if (b.checkIn && b.checkOut) {
+        const diffTime = Math.abs(new Date(b.checkOut) - new Date(b.checkIn));
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) nights = diffDays;
+      }
+      
+      const nightlyPrice = (b.home && b.home.price) ? Number(b.home.price) : 5000;
+      const bookingTotal = Number(b.totalPrice) > 0 ? Number(b.totalPrice) : (nightlyPrice * nights);
+      
+      totalGrossRevenue += bookingTotal;
+      totalNightsBooked += nights;
+      
+      return {
+        ...b,
+        nightsCalculated: nights,
+        computedPrice: bookingTotal,
+        guestDisplayName: (b.user && (b.user.name || (b.user.firstName ? (b.user.firstName + ' ' + (b.user.lastName || '')) : b.user.email))) || 'Verified Guest',
+      };
+    });
+    
+    const platformFeePercent = 3;
+    const netPayout = Math.round(totalGrossRevenue * (1 - platformFeePercent / 100));
+    const avgStayDuration = enrichedBookings.length > 0 ? Math.round((totalNightsBooked / enrichedBookings.length) * 10) / 10 : 2.0;
+    const avgBookingValue = enrichedBookings.length > 0 ? Math.round(totalGrossRevenue / enrichedBookings.length) : 0;
+    
+    const homesBreakdown = targetHomes.map(h => {
+      const hBookings = enrichedBookings.filter(b => {
+        const hId = (b.home && (b.home._id || b.home)) ? (b.home._id || b.home).toString() : '';
+        return hId === h._id.toString();
+      });
+      
+      const hRevenue = hBookings.reduce((sum, b) => sum + (b.computedPrice || 0), 0);
+      const hNights = hBookings.reduce((sum, b) => sum + (b.nightsCalculated || 2), 0);
+      
+      return {
+        homeId: h._id,
+        houseName: h.houseName || 'Cozy Haven',
+        location: h.location || 'India',
+        nightlyPrice: Number(h.price) || 0,
+        photoUrl: h.photoUrl || '',
+        bookingsCount: hBookings.length,
+        nightsBooked: hNights,
+        grossRevenue: hRevenue,
+        netEarnings: Math.round(hRevenue * (1 - platformFeePercent / 100)),
+      };
+    });
+    
+    const mohanBenchmark = {
+      scenarioName: "Mohan's 10-Guest 2-Night Model",
+      description: "10 guests booking for 2 nights each at the host's flagship property rate.",
+      sampleGuests: 10,
+      sampleNights: 2,
+      sampleNightlyRate: targetHomes[0] ? Number(targetHomes[0].price) || 8000 : 8000,
+      projectedGross: 10 * 2 * (targetHomes[0] ? Number(targetHomes[0].price) || 8000 : 8000),
+      projectedNet: Math.round(10 * 2 * (targetHomes[0] ? Number(targetHomes[0].price) || 8000 : 8000) * 0.97)
+    };
+    
+    return res.status(200).json({
+      success: true,
+      isDemoPortfolio: isDemoPortfolio,
+      hostName: (user && (user.name || user.firstName || user.email)) || 'Mohan (Host)',
+      currency: 'INR',
+      currencySymbol: '₹',
+      summary: {
+        totalListings: targetHomes.length,
+        totalBookings: enrichedBookings.length,
+        totalNightsBooked: totalNightsBooked,
+        avgStayDuration: avgStayDuration,
+        totalGrossRevenue: totalGrossRevenue,
+        netPayout: netPayout,
+        platformFeePercent: platformFeePercent,
+        avgBookingValue: avgBookingValue,
+      },
+      homesBreakdown: homesBreakdown,
+      recentBookings: enrichedBookings.slice(0, 10),
+      mohanBenchmark: mohanBenchmark,
+    });
+  } catch (error) {
+    console.error('Error in getHostWealthAnalytics:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to calculate host wealth metrics',
+      error: error.message,
+    });
+  }
+};
+

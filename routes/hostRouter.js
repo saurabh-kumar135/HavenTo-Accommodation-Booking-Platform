@@ -21,4 +21,7 @@ hostRouter.post("/api/host/homes/delete/:homeId", hostController.postDeleteHome)
 hostRouter.post("/api/host/verify-kyc", hostController.postVerifyKyc);
 hostRouter.get("/api/host/kyc-status", hostController.getKycStatus);
 
+// Host Wealth & Revenue Analytics
+hostRouter.get("/api/host/wealth-analytics", hostController.getHostWealthAnalytics);
+
 module.exports = hostRouter;
