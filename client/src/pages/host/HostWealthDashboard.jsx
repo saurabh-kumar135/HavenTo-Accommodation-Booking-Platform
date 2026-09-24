@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
-import { getHostWealthAnalytics } from '../../services/api';
+import { getHostWealthAnalytics, createBooking } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import BookingModal from '../../components/BookingModal';
 
 const HostWealthDashboard = () => {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'homes' | 'stays'
+  const [selectedHomeForBooking, setSelectedHomeForBooking] = useState(null);
 
   // Simple 3-step Calculator
   const [guestsCount, setGuestsCount] = useState(10);
@@ -42,6 +46,32 @@ const HostWealthDashboard = () => {
   const handleSelectHome = (home) => {
     setSelectedHomeName(home.houseName);
     setPricePerNight(home.nightlyPrice);
+  };
+
+  const handleOpenBooking = (homeItem) => {
+    setSelectedHomeForBooking({
+      _id: homeItem.homeId,
+      id: homeItem.homeId,
+      houseName: homeItem.houseName,
+      location: homeItem.location,
+      price: homeItem.nightlyPrice,
+      photo: homeItem.photoUrl,
+    });
+  };
+
+  const handleConfirmBooking = async (bookingData) => {
+    try {
+      const res = await createBooking(bookingData);
+      if (res.data?.success) {
+        setSelectedHomeForBooking(null);
+        showToast('Stay booked successfully! Revenue credited to your host earnings.', 'success');
+        loadData();
+      }
+    } catch (error) {
+      console.error('Error booking home:', error);
+      const msg = error.response?.data?.detail || error.response?.data?.message || 'Failed to book home.';
+      showToast(msg, 'error');
+    }
   };
 
   // Simple Formula: Guests x Nights x Price
@@ -304,6 +334,20 @@ const HostWealthDashboard = () => {
                       ₹{perYear.toLocaleString('en-IN')} / year
                     </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const matched = homes.find(h => h.houseName === selectedHomeName) || homes[0];
+                      if (matched) handleOpenBooking(matched);
+                    }}
+                    className="mt-4 w-full py-2.5 px-4 bg-[#A67C52] hover:bg-[#8B6F47] text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.253 3.75m3 0h-16.5m16.5 0v11.25A2.25 2.25 0 0 1 18 20.25H6a2.25 2.25 0 0 1-2.25-2.25V7.5m16.5 0v-1.5a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v1.5m16.5 0h-16.5" />
+                    </svg>
+                    <span>Book Stay For This Home</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -368,6 +412,24 @@ const HostWealthDashboard = () => {
                         <div className="flex items-center justify-between text-sm font-extrabold">
                           <span className="text-gray-700">Money Made:</span>
                           <span className="text-[#A67C52]">₹{h.grossRevenue.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="mt-3 pt-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenBooking(h)}
+                            className="flex-1 py-2 px-3 bg-[#A67C52] hover:bg-[#8B6F47] text-white font-semibold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.253 3.75m3 0h-16.5m16.5 0v11.25A2.25 2.25 0 0 1 18 20.25H6a2.25 2.25 0 0 1-2.25-2.25V7.5m16.5 0v-1.5a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v1.5m16.5 0h-16.5" />
+                            </svg>
+                            <span>Book / Buy Stay</span>
+                          </button>
+                          <Link
+                            to={'/homes/' + h.homeId}
+                            className="py-2 px-3 bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold text-xs rounded-xl border border-gray-200 transition text-center"
+                          >
+                            Details
+                          </Link>
                         </div>
                       </div>
                     </div>
@@ -444,6 +506,13 @@ const HostWealthDashboard = () => {
           </div>
         )}
       </main>
+
+      <BookingModal 
+        isOpen={Boolean(selectedHomeForBooking)}
+        home={selectedHomeForBooking}
+        onClose={() => setSelectedHomeForBooking(null)}
+        onConfirm={handleConfirmBooking}
+      />
     </div>
   );
 };
