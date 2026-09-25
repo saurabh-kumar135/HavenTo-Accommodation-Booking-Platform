@@ -5,9 +5,9 @@ import {
   Video, VideoOff, Mic, MicOff, Monitor, MonitorOff, 
   PhoneOff, MessageSquare, Copy, Check, Users, Home, 
   Send, X, Sparkles, MapPin, Star, ShieldCheck, Share2,
-  PhoneCall, Bell
+  PhoneCall, Bell, Radio, ArrowRight, Play
 } from 'lucide-react';
-import { getHomeDetails, getTourConfig } from '../services/api';
+import { getHomeDetails, getTourConfig, getActiveTourRooms } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import { getImageUrl, API_URL } from '../config/api';
@@ -24,7 +24,7 @@ export default function VirtualTour() {
 
   // Deterministic room & home extraction
   const effectiveHomeId = homeIdFromQuery || location.state?.homeId || (routeRoomId?.startsWith('property_') ? routeRoomId.replace('property_', '') : '');
-  const effectiveRoomId = routeRoomId || (effectiveHomeId ? `property_${effectiveHomeId}` : 'tour_haven_' + Math.random().toString(36).substr(2, 6));
+  const effectiveRoomId = routeRoomId || (effectiveHomeId ? `property_${effectiveHomeId}` : 'haven_demo_tour');
 
   // Tour & Home Metadata
   const [roomId, setRoomId] = useState(effectiveRoomId);
@@ -38,6 +38,10 @@ export default function VirtualTour() {
   const [interestAlert, setInterestAlert] = useState(null);
   const [reRingSent, setReRingSent] = useState(false);
   const [hostJoinedNotification, setHostJoinedNotification] = useState(null);
+
+  // Active rooms discovery from server
+  const [activeRooms, setActiveRooms] = useState([]);
+  const [joinCodeInput, setJoinCodeInput] = useState('');
 
   // Media Controls
   const [isAudioMuted, setIsAudioMuted] = useState(false);
@@ -67,10 +71,12 @@ export default function VirtualTour() {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.relay.metered.ca:80' }
   ]);
 
-  // Load User Details & Property Information
+  // Load User Details & Active Room Discovery
   useEffect(() => {
     if (user) {
       setUserName(user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user.email?.split('@')[0] || 'Guest');
@@ -106,6 +112,22 @@ export default function VirtualTour() {
         }
       })
       .catch(() => {});
+
+    // Polling active tour rooms every 3 seconds for 1-click room joining
+    const fetchRooms = async () => {
+      try {
+        const res = await getActiveTourRooms();
+        if (res.data && res.data.success) {
+          setActiveRooms(res.data.rooms || []);
+        }
+      } catch (err) {
+        // silent fail on network retry
+      }
+    };
+    fetchRooms();
+    const roomsInterval = setInterval(fetchRooms, 3500);
+
+    return () => clearInterval(roomsInterval);
   }, [user, homeId]);
 
   // Auto-scroll chat to bottom
@@ -115,13 +137,15 @@ export default function VirtualTour() {
     }
   }, [chatMessages, chatOpen]);
 
-  // Ensure local & remote streams attach correctly to video elements
+  // Ensure local & remote streams attach and play properly
   useEffect(() => {
     if (inCall && localVideoRef.current && localStreamRef.current) {
       localVideoRef.current.srcObject = localStreamRef.current;
+      localVideoRef.current.play().catch(e => console.log('Local video play warning:', e));
     }
     if (inCall && remoteVideoRef.current && remoteStreamRef.current) {
       remoteVideoRef.current.srcObject = remoteStreamRef.current;
+      remoteVideoRef.current.play().catch(e => console.log('Remote video play warning:', e));
     }
   }, [inCall, remoteConnected]);
 
@@ -138,39 +162,106 @@ export default function VirtualTour() {
     }
   };
 
-  // Get user camera & microphone stream
+  // Resilient Media Stream acquisition with camera/mic timeouts and animated canvas fallback
   const getMediaStream = async () => {
+    const audioConfig = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true
+    };
+
+    const requestMediaWithTimeout = (constraints, timeoutMs = 2500) => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return Promise.reject(new Error('getUserMedia not supported'));
+      }
+      return Promise.race([
+        navigator.mediaDevices.getUserMedia(constraints),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Media prompt timeout')), timeoutMs))
+      ]);
+    };
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // 1. Try full HD video with enhanced audio
+      return await requestMediaWithTimeout({
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-        audio: { echoCancellation: true, noiseSuppression: true }
-      });
-      return stream;
-    } catch (err) {
-      console.warn('Full media stream failed, falling back to audio only:', err);
+        audio: audioConfig
+      }, 2500);
+    } catch (err1) {
       try {
-        return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      } catch (audioErr) {
-        console.error('Microphone/Camera access denied:', audioErr);
-        return null;
+        // 2. Fallback to basic video + audio
+        return await requestMediaWithTimeout({ video: true, audio: audioConfig }, 1500);
+      } catch (err2) {
+        try {
+          // 3. Fallback to audio only
+          return await requestMediaWithTimeout({ video: false, audio: true }, 1000);
+        } catch (err3) {
+          console.warn('Physical camera/mic unavailable or locked. Generating animated canvas stream fallback:', err3.name);
+          // 4. Synthetic animated canvas stream for multi-tab testing on same device
+          const canvas = document.createElement('canvas');
+          canvas.width = 640;
+          canvas.height = 480;
+          const ctx = canvas.getContext('2d');
+          let frame = 0;
+          const draw = () => {
+            frame++;
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, 640, 480);
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 26px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('HavenTo Live Tour', 320, 200);
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '18px sans-serif';
+            ctx.fillText(userName || (userRole === 'host' ? 'Property Host' : 'Prospective Tenant'), 320, 240);
+            ctx.beginPath();
+            ctx.arc(320, 310, 36 + Math.sin(frame * 0.05) * 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#dc2626';
+            ctx.fill();
+            requestAnimationFrame(draw);
+          };
+          draw();
+          const canvasStream = canvas.captureStream(30);
+
+          try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const dst = audioCtx.createMediaStreamDestination();
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0;
+            gain.connect(dst);
+            const silentAudioTrack = dst.stream.getAudioTracks()[0];
+            if (silentAudioTrack) {
+              silentAudioTrack.enabled = false;
+              canvasStream.addTrack(silentAudioTrack);
+            }
+          } catch (audioErr) {
+            console.warn('Silent audio creation skipped:', audioErr);
+          }
+          return canvasStream;
+        }
       }
     }
   };
 
   // Join the Tour Room
-  const handleJoinTour = async () => {
-    if (!roomId.trim()) return;
+  const handleJoinTour = async (customRoomId) => {
+    const finalRoomId = (customRoomId || roomId || '').trim() || 'haven_demo_tour';
+    setRoomId(finalRoomId);
+
+    // Keep URL in sync so address bar matches the live room
+    try {
+      window.history.replaceState(null, '', `/tour/${finalRoomId}` + (homeId ? `?homeId=${homeId}` : ''));
+    } catch (e) {}
 
     const stream = await getMediaStream();
-    if (!stream) {
-      alert('Could not access camera or microphone. Please enable camera/microphone permissions in your browser.');
-      return;
-    }
-
     localStreamRef.current = stream;
     setInCall(true);
 
-    // Initialize Socket.io connection
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+      localVideoRef.current.play().catch(e => console.log('Local stream play error:', e));
+    }
+
+    // Initialize Socket.io connection to the active production backend
     const socket = io(API_URL, {
       transports: ['websocket', 'polling'],
       withCredentials: true
@@ -178,9 +269,9 @@ export default function VirtualTour() {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('Connected to Virtual Tour signaling server:', socket.id);
+      console.log('✅ Connected to HavenTo Virtual Tour signaling server:', socket.id);
       socket.emit('join-tour-room', {
-        roomId,
+        roomId: finalRoomId,
         homeId,
         user: {
           name: userName,
@@ -189,20 +280,23 @@ export default function VirtualTour() {
       });
     });
 
-    // Handle room joined & establish connection with existing peers
+    // When joining an existing room with participants
     socket.on('tour-room-joined', async ({ participants }) => {
-      console.log('Room joined, existing participants:', participants);
+      console.log('Room joined, existing peers:', participants);
       if (participants && participants.length > 0) {
-        const peer = participants[0]; // 1-on-1 virtual tour connection
-        setRemoteUserName(peer.user?.name || 'Property Host');
-        await createPeerConnection(peer.socketId, true);
+        const peer = participants[0]; // 1-on-1 virtual walkthrough
+        setRemoteUserName(peer.user?.name || (userRole === 'host' ? 'Prospective Tenant' : 'Property Host'));
+        // As the newly joined participant, initiate the WebRTC offer
+        initiatePeerConnection(peer.socketId, true);
       }
     });
 
-    // When another peer joins
-    socket.on('tour-user-joined', ({ socketId, user: joiningUser }) => {
-      console.log('New peer joined virtual tour:', joiningUser);
+    // When another peer joins while we are already in the room
+    socket.on('tour-user-joined', async ({ socketId, user: joiningUser }) => {
+      console.log('Peer joined room:', joiningUser);
       setRemoteUserName(joiningUser?.name || (userRole === 'host' ? 'Prospective Tenant' : 'Property Host'));
+      // Prepare peer connection to receive incoming offer with local tracks attached
+      initiatePeerConnection(socketId, false);
     });
 
     // When the host enters the room
@@ -215,36 +309,46 @@ export default function VirtualTour() {
     // Handle incoming WebRTC Offer
     socket.on('signal-offer', async ({ from, offer, user: caller }) => {
       console.log('Received WebRTC Offer from:', from);
-      setRemoteUserName(caller?.name || 'Property Host');
-      const pc = await createPeerConnection(from, false);
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      await processQueuedCandidates(pc);
+      if (caller?.name) setRemoteUserName(caller.name);
+      const pc = peerConnectionRef.current || initiatePeerConnection(from, false);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await processQueuedCandidates(pc);
 
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
 
-      socket.emit('signal-answer', {
-        to: from,
-        answer
-      });
+        socket.emit('signal-answer', {
+          to: from,
+          answer
+        });
+      } catch (err) {
+        console.error('Error handling WebRTC offer:', err);
+      }
     });
 
     // Handle incoming WebRTC Answer
     socket.on('signal-answer', async ({ answer }) => {
       console.log('Received WebRTC Answer');
       if (peerConnectionRef.current) {
-        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
-        await processQueuedCandidates(peerConnectionRef.current);
+        try {
+          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+          await processQueuedCandidates(peerConnectionRef.current);
+        } catch (err) {
+          console.error('Error handling WebRTC answer:', err);
+        }
       }
     });
 
     // Handle incoming ICE Candidate
     socket.on('signal-ice-candidate', async ({ candidate }) => {
-      if (peerConnectionRef.current && peerConnectionRef.current.remoteDescription) {
+      if (!candidate) return;
+      const pc = peerConnectionRef.current;
+      if (pc && pc.remoteDescription && pc.remoteDescription.type) {
         try {
-          await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (e) {
-          console.warn('Error adding ICE candidate:', e);
+          console.warn('Error adding ICE candidate directly:', e);
         }
       } else {
         iceCandidatesQueueRef.current.push(candidate);
@@ -280,19 +384,22 @@ export default function VirtualTour() {
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = null;
       }
+      remoteStreamRef.current = null;
       setChatMessages(prev => [...prev, {
         id: 'sys_' + Date.now(),
         sender: 'System',
-        message: `${leftUser} left the virtual tour.`,
+        message: `${leftUser || 'Participant'} left the virtual tour.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
     });
   };
 
-  // Create WebRTC Peer Connection
-  const createPeerConnection = async (targetSocketId, isInitiator) => {
+  // Create & Manage WebRTC Peer Connection
+  const initiatePeerConnection = (targetSocketId, isInitiator) => {
     if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
+      try {
+        peerConnectionRef.current.close();
+      } catch (e) {}
     }
 
     const pc = new RTCPeerConnection({
@@ -300,7 +407,7 @@ export default function VirtualTour() {
     });
     peerConnectionRef.current = pc;
 
-    // Add local tracks to peer connection
+    // Add local media tracks to peer connection
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => {
         pc.addTrack(track, localStreamRef.current);
@@ -309,12 +416,15 @@ export default function VirtualTour() {
 
     // Handle remote track received
     pc.ontrack = (event) => {
-      console.log('Received remote media track:', event.track.kind);
-      remoteStreamRef.current = event.streams[0];
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = event.streams[0];
+      console.log('🎥 Received remote media track:', event.track.kind);
+      if (event.streams && event.streams[0]) {
+        remoteStreamRef.current = event.streams[0];
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+          remoteVideoRef.current.play().catch(e => console.log('Remote play error:', e));
+        }
+        setRemoteConnected(true);
       }
-      setRemoteConnected(true);
     };
 
     // Relay local ICE candidates to remote peer via signaling socket
@@ -328,7 +438,7 @@ export default function VirtualTour() {
     };
 
     pc.onconnectionstatechange = () => {
-      console.log('Peer connection state:', pc.connectionState);
+      console.log('WebRTC connection state:', pc.connectionState);
       if (pc.connectionState === 'connected') {
         setRemoteConnected(true);
       } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
@@ -336,18 +446,21 @@ export default function VirtualTour() {
       }
     };
 
-    // If initiator, create and send SDP offer
+    // If caller/initiator, create and send SDP offer with audio/video media descriptions
     if (isInitiator) {
-      try {
-        const offer = await pc.createOffer();
+      pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      })
+      .then(async (offer) => {
         await pc.setLocalDescription(offer);
-        socketRef.current.emit('signal-offer', {
+        socketRef.current?.emit('signal-offer', {
           to: targetSocketId,
-          offer
+          offer,
+          user: { name: userName, role: userRole }
         });
-      } catch (err) {
-        console.error('Error creating WebRTC offer:', err);
-      }
+      })
+      .catch((err) => console.error('Error creating SDP offer:', err));
     }
 
     return pc;
@@ -510,7 +623,9 @@ export default function VirtualTour() {
       screenStreamRef.current = null;
     }
     if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
+      try {
+        peerConnectionRef.current.close();
+      } catch (e) {}
       peerConnectionRef.current = null;
     }
     if (socketRef.current) {
@@ -539,7 +654,9 @@ export default function VirtualTour() {
         screenStreamRef.current.getTracks().forEach(track => track.stop());
       }
       if (peerConnectionRef.current) {
-        peerConnectionRef.current.close();
+        try {
+          peerConnectionRef.current.close();
+        } catch (e) {}
       }
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -567,119 +684,297 @@ export default function VirtualTour() {
         </div>
       )}
 
+      {/* ========================================================= */}
       {/* LOBBY / PRE-CALL VIEW */}
+      {/* ========================================================= */}
       {!inCall ? (
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="max-w-xl w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
-            <div className="flex items-center gap-3 text-red-500">
-              <div className="p-3 bg-red-500/10 rounded-2xl">
-                <Video className="w-8 h-8" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white">Live Virtual Property Tour</h1>
-                <p className="text-sm text-slate-400">High-Definition 1-on-1 Walkthrough via WebRTC</p>
-              </div>
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 py-10 max-w-5xl mx-auto w-full">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold mb-3 tracking-wider uppercase">
+              <Radio className="w-3.5 h-3.5 text-red-500 animate-pulse" /> Live Property Walkthrough
             </div>
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+              Virtual Property Tour
+            </h1>
+            <p className="mt-2 text-sm text-slate-400 max-w-lg mx-auto">
+              Real-time WebRTC 1-on-1 audio/video call between host and prospective tenant. Connect instantly and inspect every room live.
+            </p>
+          </div>
 
-            {/* Property Highlight Card */}
-            {homeData && (
-              <div className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-4 flex gap-4 items-center">
-                <img 
-                  src={homeData.photos?.[0] ? getImageUrl(homeData.photos[0]) : (homeData.photo ? getImageUrl(homeData.photo) : 'https://via.placeholder.com/150')} 
-                  alt={homeData.houseName}
-                  className="w-20 h-20 rounded-xl object-cover"
-                />
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-white truncate">{homeData.houseName}</h3>
-                  <p className="text-xs text-slate-400 flex items-center gap-1 mt-1 truncate">
-                    <MapPin className="w-3.5 h-3.5 text-red-400" />
-                    {homeData.location}
-                  </p>
-                  <p className="text-sm font-bold text-emerald-400 mt-1">₹{homeData.price} <span className="text-xs text-slate-400 font-normal">/ night</span></p>
+          {/* If routeRoomId is present in URL (Direct Link Join Card) */}
+          {routeRoomId ? (
+            <div className="max-w-md w-full bg-slate-900 border border-red-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+              <div className="flex items-center gap-3 text-red-400">
+                <div className="p-3 bg-red-500/10 rounded-2xl">
+                  <Video className="w-7 h-7" />
                 </div>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Your Display Name</label>
-                <input 
-                  type="text" 
-                  value={userName} 
-                  onChange={(e) => setUserName(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500 transition"
-                  placeholder="Enter your name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Your Role</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setUserRole('guest')}
-                    className={`py-2.5 px-4 rounded-xl border text-sm font-semibold transition flex items-center justify-center gap-2 ${
-                      userRole === 'guest' 
-                        ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30' 
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                    }`}
-                  >
-                    <Users className="w-4 h-4" /> Prospective Tenant
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUserRole('host')}
-                    className={`py-2.5 px-4 rounded-xl border text-sm font-semibold transition flex items-center justify-center gap-2 ${
-                      userRole === 'host' 
-                        ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30' 
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                    }`}
-                  >
-                    <Home className="w-4 h-4" /> Property Host
-                  </button>
+                <div>
+                  <h2 className="text-xl font-bold text-white">Join Tour Room</h2>
+                  <p className="text-xs text-slate-400 font-mono">Room: {routeRoomId}</p>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Tour Room ID</label>
-                <div className="flex gap-2">
+              {homeData && (
+                <div className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-4 flex gap-4 items-center">
+                  <img 
+                    src={homeData.photos?.[0] ? getImageUrl(homeData.photos[0]) : (homeData.photo ? getImageUrl(homeData.photo) : 'https://via.placeholder.com/150')} 
+                    alt={homeData.houseName}
+                    className="w-16 h-16 rounded-xl object-cover"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-white truncate text-sm">{homeData.houseName}</h3>
+                    <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                      <MapPin className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                      {homeData.location}
+                    </p>
+                    <p className="text-xs font-bold text-emerald-400 mt-1">₹{homeData.price} <span className="text-[10px] text-slate-400 font-normal">/ night</span></p>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Your Name</label>
                   <input 
                     type="text" 
-                    value={roomId} 
-                    onChange={(e) => setRoomId(e.target.value)}
-                    className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-red-500"
+                    value={userName} 
+                    onChange={(e) => setUserName(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-red-500 transition"
+                    placeholder="Enter your name"
                   />
-                  <button
-                    type="button"
-                    onClick={handleCopyLink}
-                    className="px-4 bg-slate-800 border border-slate-700 hover:bg-slate-700 rounded-xl text-slate-300 flex items-center gap-1.5 text-sm transition"
-                    title="Copy Tour Link"
-                  >
-                    {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                  </button>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Your Role</label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setUserRole('guest')}
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                        userRole === 'guest' 
+                          ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30' 
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" /> Tenant
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUserRole('host')}
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                        userRole === 'host' 
+                          ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30' 
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      <Home className="w-3.5 h-3.5" /> Host
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => handleJoinTour(routeRoomId)}
+                  className="w-full py-3.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-2xl shadow-xl shadow-red-600/30 transition flex items-center justify-center gap-2 text-sm"
+                >
+                  <Video className="w-5 h-5" /> Join Tour Room Now
+                </button>
+              </div>
+
+              <div className="pt-2 text-center">
+                <button
+                  onClick={() => navigate('/tour')}
+                  className="text-xs text-slate-400 hover:text-white transition"
+                >
+                  Browse all active tour rooms &rarr;
+                </button>
               </div>
             </div>
+          ) : (
+            /* Multi-Card Lobby View */
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full items-start">
+              {/* CARD 1: ACTIVE LIVE WAITING ROOMS & QUICK DEMO */}
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
+                      <Radio className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-white">Live Active Tours</h2>
+                      <p className="text-xs text-slate-400">Open rooms waiting for connection</p>
+                    </div>
+                  </div>
+                  <span className="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full font-semibold border border-slate-700">
+                    {activeRooms.length} Active
+                  </span>
+                </div>
 
-            <button
-              onClick={handleJoinTour}
-              className="w-full py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-2xl shadow-xl shadow-red-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2 text-lg active:scale-98"
-            >
-              <Video className="w-6 h-6" /> {userRole === 'host' ? 'Start Tour as Property Host' : 'Start / Join Tour (Alerts Host)'}
-            </button>
+                {/* Active Rooms List */}
+                <div className="space-y-3 min-h-[140px]">
+                  {activeRooms.length === 0 ? (
+                    <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 text-center text-xs text-slate-400 space-y-2">
+                      <p className="font-medium text-slate-300">No rooms currently waiting</p>
+                      <p className="text-[11px] text-slate-500">
+                        Start a new tour room using the card on the right, or click the Quick Demo below to test instantly!
+                      </p>
+                    </div>
+                  ) : (
+                    activeRooms.map((room) => (
+                      <div 
+                        key={room.roomId}
+                        className="bg-slate-800/80 border border-slate-700 rounded-2xl p-3.5 flex items-center justify-between gap-3 hover:border-red-500/50 transition group"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
+                            <span className="font-semibold text-xs text-white truncate">
+                              {room.houseName || room.roomId}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-1 truncate">
+                            Waiting: {room.participants?.map(p => `${p.name || 'User'} (${p.role})`).join(', ') || '1 participant'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleJoinTour(room.roomId)}
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 shrink-0 group-hover:scale-105 active:scale-95"
+                        >
+                          <Video className="w-3.5 h-3.5" /> Join Call
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Quick 1-Click Demo Tour Button */}
+                <div className="pt-2 border-t border-slate-800/80">
+                  <div className="text-[11px] text-slate-400 mb-2 font-medium">Instant 2-Party Test Room:</div>
+                  <button
+                    type="button"
+                    onClick={() => handleJoinTour('haven_demo_tour')}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-2xl shadow-lg shadow-red-600/20 text-xs sm:text-sm transition flex items-center justify-center gap-2 active:scale-98"
+                  >
+                    <Play className="w-4 h-4 fill-white" /> Quick Connect Demo Tour (haven_demo_tour)
+                  </button>
+                  <p className="text-[11px] text-slate-500 mt-1.5 text-center">
+                    Both host and guest can click this to instantly join the same room without codes.
+                  </p>
+                </div>
+              </div>
+
+              {/* CARD 2: START NEW TOUR OR ENTER CODE */}
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-red-500/10 text-red-400 rounded-xl">
+                    <Video className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white">Start / Custom Tour</h2>
+                    <p className="text-xs text-slate-400">Launch a private room or enter a code</p>
+                  </div>
+                </div>
+
+                {/* Display Name Input */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Your Name</label>
+                  <input 
+                    type="text" 
+                    value={userName} 
+                    onChange={(e) => setUserName(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-xs sm:text-sm focus:outline-none focus:border-red-500 transition"
+                    placeholder="Enter your name"
+                  />
+                </div>
+
+                {/* Role Switcher */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Your Role</label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setUserRole('guest')}
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                        userRole === 'guest' 
+                          ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30' 
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" /> Tenant
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUserRole('host')}
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                        userRole === 'host' 
+                          ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30' 
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      <Home className="w-3.5 h-3.5" /> Property Host
+                    </button>
+                  </div>
+                </div>
+
+                {/* Join by Specific Room Code */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Enter Room Code or Property ID</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={joinCodeInput} 
+                      onChange={(e) => setJoinCodeInput(e.target.value)}
+                      placeholder="e.g. haven_demo_tour or property_123"
+                      className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-red-500"
+                    />
+                    <button
+                      disabled={!joinCodeInput.trim()}
+                      onClick={() => handleJoinTour(joinCodeInput.trim())}
+                      className="px-4 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-white rounded-xl border border-slate-700 transition"
+                    >
+                      Join
+                    </button>
+                  </div>
+                </div>
+
+                {/* Launch New Room Button */}
+                <button
+                  onClick={() => {
+                    const newId = 'tour_' + Math.random().toString(36).substr(2, 6);
+                    handleJoinTour(newId);
+                  }}
+                  className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-2xl border border-slate-700 transition flex items-center justify-center gap-2 text-xs sm:text-sm active:scale-98"
+                >
+                  <Video className="w-4 h-4 text-red-400" /> Launch New Room & Get Invite Link
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Security & Direct Peer-to-Peer Footer Badge */}
+          <div className="mt-10 p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center gap-3 text-xs text-slate-400 max-w-xl">
+            <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div>
+              <span className="text-slate-200 font-semibold">End-to-End Encrypted WebRTC</span>: Video and audio stream directly between participants with low-latency and no middleman recording.
+            </div>
           </div>
         </div>
       ) : (
+        /* ========================================================= */
         /* ACTIVE IN-CALL VIEW */
+        /* ========================================================= */
         <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
           {/* Main Video Arena */}
           <div className="flex-1 flex flex-col bg-black relative p-3 md:p-6 overflow-hidden">
             {/* Top Tour Info Bar */}
             <div className="absolute top-6 left-6 right-6 z-20 flex justify-between items-center pointer-events-none">
-              <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-2xl px-4 py-2 pointer-events-auto flex items-center gap-3">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-xs md:text-sm font-semibold truncate max-w-[200px] md:max-w-xs">
-                  {homeData?.houseName || 'Virtual Tour Room'}
+              <div className="bg-slate-900/85 backdrop-blur-md border border-slate-700/60 rounded-2xl px-4 py-2 pointer-events-auto flex items-center gap-3 shadow-lg">
+                <span className={`w-2.5 h-2.5 rounded-full ${remoteConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-ping'}`}></span>
+                <span className="text-xs md:text-sm font-semibold truncate max-w-[180px] md:max-w-xs">
+                  {homeData?.houseName || (roomId === 'haven_demo_tour' ? 'HavenTo Demo Tour' : `Tour: ${roomId}`)}
+                </span>
+                <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono">
+                  {roomId}
                 </span>
                 <button
                   onClick={handleCopyLink}
@@ -706,18 +1001,18 @@ export default function VirtualTour() {
             {/* Video Streams Container */}
             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 items-center justify-center relative mt-14 mb-20">
               {/* Remote Participant Video */}
-              <div className="w-full h-full bg-slate-900 border border-slate-800 rounded-3xl relative overflow-hidden flex items-center justify-center">
+              <div className="w-full h-full min-h-[280px] bg-slate-900 border border-slate-800 rounded-3xl relative overflow-hidden flex items-center justify-center shadow-2xl">
                 <video 
                   ref={remoteVideoRef} 
                   autoPlay 
                   playsInline 
-                  className={`w-full h-full object-cover ${!remoteConnected ? 'hidden' : ''}`}
+                  className="w-full h-full object-cover"
                 />
                 {!remoteConnected && (
-                  <div className="text-center p-6 max-w-xs sm:max-w-sm mx-auto space-y-4">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/95 text-center p-6 space-y-4">
                     <div className="relative mx-auto w-16 h-16 sm:w-20 sm:h-20">
                       <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping"></div>
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-800 border-2 border-emerald-500/50 flex items-center justify-center text-emerald-400 relative">
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-800 border-2 border-emerald-500/50 flex items-center justify-center text-emerald-400 relative shadow-lg">
                         <PhoneCall className="w-7 h-7 sm:w-8 sm:h-8 animate-bounce" />
                       </div>
                     </div>
@@ -726,68 +1021,62 @@ export default function VirtualTour() {
                       <p className="text-xs text-emerald-400 font-medium mt-1 flex items-center justify-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                         {userRole === 'guest'
-                          ? 'Host notified in real-time. Waiting to connect...'
+                          ? 'Waiting for host to enter room...'
                           : 'Waiting for prospective tenant to enter room...'}
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">
+                        Share room code <span className="text-red-400 font-mono font-bold">{roomId}</span> with the other person.
                       </p>
                     </div>
 
-                    {userRole === 'guest' ? (
-                      <div className="pt-2 space-y-2">
+                    <div className="pt-2 space-y-2 w-full max-w-xs mx-auto">
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-xl border border-slate-700 transition flex items-center justify-center gap-2 active:scale-95"
+                      >
+                        {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copied ? 'Link Copied to Clipboard!' : 'Copy Tour Room Link'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleShareWhatsApp}
+                        className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white rounded-xl transition flex items-center justify-center gap-2 shadow-sm active:scale-95"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        Share Tour on WhatsApp
+                      </button>
+
+                      {userRole === 'guest' && (
                         <button
                           type="button"
                           onClick={handleRingHostAgain}
                           disabled={reRingSent}
-                          className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-xl border border-slate-700 transition flex items-center justify-center gap-2 active:scale-95"
+                          className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 rounded-xl border border-slate-800 transition flex items-center justify-center gap-1.5"
                         >
-                          <Bell className="w-3.5 h-3.5 text-amber-400" />
-                          {reRingSent ? 'Sent Ring Alert to Host!' : 'Ring Host Again'}
+                          <Bell className="w-3 h-3 text-amber-400" />
+                          {reRingSent ? 'Notification Sent to Host!' : 'Alert Host in Real-Time'}
                         </button>
-
-                        <button
-                          type="button"
-                          onClick={handleShareWhatsApp}
-                          className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white rounded-xl transition flex items-center justify-center gap-2 shadow-sm active:scale-95"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                          Share Tour on WhatsApp
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="pt-2 space-y-2">
-                        <button
-                          type="button"
-                          onClick={handleCopyLink}
-                          className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-xl border border-slate-700 transition flex items-center justify-center gap-2 active:scale-95"
-                        >
-                          {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                          {copied ? 'Link Copied!' : 'Copy Tour Room Link'}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={handleShareWhatsApp}
-                          className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white rounded-xl transition flex items-center justify-center gap-2 shadow-sm active:scale-95"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                          Send Link via WhatsApp
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
-                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200">
-                  {remoteUserName} {peerScreenSharing && ' (Sharing Screen)'}
+                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200 flex items-center gap-2">
+                  {remoteConnected && <span className="w-2 h-2 rounded-full bg-emerald-400"></span>}
+                  <span>{remoteUserName}</span>
+                  {peerScreenSharing && <span className="text-[10px] text-amber-300 font-semibold">(Screen Sharing)</span>}
                 </div>
               </div>
 
               {/* Local Participant Video */}
-              <div className="w-full h-full bg-slate-900 border border-slate-800 rounded-3xl relative overflow-hidden flex items-center justify-center">
+              <div className="w-full h-full min-h-[280px] bg-slate-900 border border-slate-800 rounded-3xl relative overflow-hidden flex items-center justify-center shadow-2xl">
                 <video 
                   ref={localVideoRef} 
                   autoPlay 
                   playsInline 
                   muted 
-                  className={`w-full h-full object-cover ${isVideoOff ? 'hidden' : ''}`}
+                  className={`w-full h-full object-cover transform -scale-x-100 ${isVideoOff ? 'hidden' : ''}`}
                 />
                 {isVideoOff && (
                   <div className="text-center p-6 space-y-3">
@@ -799,6 +1088,7 @@ export default function VirtualTour() {
                   </div>
                 )}
                 <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                   <span>{userName} (You - {userRole === 'host' ? 'Host' : 'Guest'})</span>
                   {isAudioMuted && <MicOff className="w-3.5 h-3.5 text-red-400" />}
                 </div>
@@ -854,7 +1144,7 @@ export default function VirtualTour() {
               {/* Leave / Hang Up */}
               <button 
                 onClick={handleHangUp}
-                className="p-3 bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg shadow-red-600/30 transition"
+                className="p-3 bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg shadow-red-600/30 transition active:scale-95"
                 title="Leave Virtual Tour"
               >
                 <PhoneOff className="w-5 h-5" />

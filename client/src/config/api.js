@@ -5,9 +5,9 @@ export const getApiUrl = () => {
     if (isLocal) {
       return import.meta.env.VITE_API_URL || 'http://localhost:3009';
     }
-    return import.meta.env.VITE_API_URL || 'https://havento-backend.onrender.com';
+    return import.meta.env.VITE_API_URL || 'https://havento-accommodation-booking-platform.onrender.com';
   }
-  return import.meta.env.VITE_API_URL || 'https://havento-backend.onrender.com';
+  return import.meta.env.VITE_API_URL || 'https://havento-accommodation-booking-platform.onrender.com';
 };
 
 export const API_URL = getApiUrl();

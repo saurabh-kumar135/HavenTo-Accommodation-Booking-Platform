@@ -36,12 +36,14 @@ function initVirtualTourSignaling(io) {
       if (!tourRooms.has(roomId)) {
         tourRooms.set(roomId, {
           homeId: socket.homeId,
+          houseName: roomId === 'haven_demo_tour' ? 'HavenTo Demo Walkthrough' : null,
           participants: new Map(),
           createdAt: Date.now()
         });
       }
 
       const roomData = tourRooms.get(roomId);
+      if (homeId && !roomData.homeId) roomData.homeId = homeId;
       roomData.participants.set(socket.id, {
         socketId: socket.id,
         user: socket.user,
@@ -245,7 +247,9 @@ function getActiveTourRooms() {
     active.push({
       roomId,
       homeId: data.homeId,
+      houseName: data.houseName || (roomId === 'haven_demo_tour' ? 'HavenTo Demo Tour' : ('Tour Room ' + roomId.slice(-6))),
       participantCount: data.participants.size,
+      createdAt: data.createdAt,
       participants: Array.from(data.participants.values()).map(p => ({
         name: p.user?.name,
         role: p.user?.role
