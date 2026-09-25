@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { TOUR_API_URL } from '../config/api';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -75,9 +76,9 @@ export const getHostKycStatus = () => api.get('/api/host/kyc-status');
 // Host Wealth & Revenue Analytics
 export const getHostWealthAnalytics = () => api.get('/api/host/wealth-analytics');
 
-// Virtual Tour APIs
-export const getActiveTourRooms = () => api.get('/api/virtual-tour/active');
-export const getTourConfig = () => api.get('/api/virtual-tour/config');
-export const createTourRoom = (tourData) => api.post('/api/virtual-tour/create', tourData);
+// Virtual Tour APIs (Direct to active WebRTC signaling server)
+export const getActiveTourRooms = () => axios.get(`${TOUR_API_URL}/api/virtual-tour/active`);
+export const getTourConfig = () => axios.get(`${TOUR_API_URL}/api/virtual-tour/config`);
+export const createTourRoom = (tourData) => axios.post(`${TOUR_API_URL}/api/virtual-tour/create`, tourData);
 
 export default api;

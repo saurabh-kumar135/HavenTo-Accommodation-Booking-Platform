@@ -10,7 +10,7 @@ import {
 import { getHomeDetails, getTourConfig, getActiveTourRooms } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
-import { getImageUrl, API_URL } from '../config/api';
+import { getImageUrl, API_URL, TOUR_API_URL } from '../config/api';
 
 export default function VirtualTour() {
   const { roomId: routeRoomId } = useParams();
@@ -262,7 +262,7 @@ export default function VirtualTour() {
     }
 
     // Initialize Socket.io connection to the active production backend
-    const socket = io(API_URL, {
+    const socket = io(TOUR_API_URL, {
       transports: ['websocket', 'polling'],
       withCredentials: true
     });
