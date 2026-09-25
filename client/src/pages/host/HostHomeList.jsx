@@ -1,17 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getHostHomes, deleteHome, getHostWealthAnalytics, createBooking } from '../../services/api';
+import { getHostHomes, deleteHome, getHostWealthAnalytics } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import Navbar from '../../components/Navbar';
 import HomeCard from '../../components/HomeCard';
-import BookingModal from '../../components/BookingModal';
 
 const HostHomeList = () => {
   const { showToast } = useToast();
   const [homes, setHomes] = useState([]);
   const [wealthSummary, setWealthSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedHomeForBooking, setSelectedHomeForBooking] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -45,28 +43,6 @@ const HostHomeList = () => {
       } catch (error) {
         console.error('Error deleting home:', error);
       }
-    }
-  };
-
-  const handleOpenBookingModal = (homeId) => {
-    const target = homes.find(h => (h._id || h.id) === homeId);
-    if (target) {
-      setSelectedHomeForBooking(target);
-    }
-  };
-
-  const handleConfirmBooking = async (bookingData) => {
-    try {
-      const res = await createBooking(bookingData);
-      if (res.data?.success) {
-        setSelectedHomeForBooking(null);
-        showToast('Stay booked successfully! Revenue credited to your host earnings.', 'success');
-        fetchData();
-      }
-    } catch (error) {
-      console.error('Error booking home:', error);
-      const msg = error.response?.data?.detail || error.response?.data?.message || 'Failed to book home.';
-      showToast(msg, 'error');
     }
   };
 
@@ -164,9 +140,7 @@ const HostHomeList = () => {
                   key={home._id} 
                   home={home}
                   showDetails={true}
-                  showBook={true}
                   showTour={true}
-                  onBook={handleOpenBookingModal}
                   showEdit={true}
                   showDelete={true}
                   onDelete={handleDelete}
@@ -176,13 +150,6 @@ const HostHomeList = () => {
           )}
         </div>
       </main>
-
-      <BookingModal 
-        isOpen={Boolean(selectedHomeForBooking)}
-        home={selectedHomeForBooking}
-        onClose={() => setSelectedHomeForBooking(null)}
-        onConfirm={handleConfirmBooking}
-      />
     </>
   );
 };

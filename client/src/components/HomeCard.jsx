@@ -73,7 +73,7 @@ const HomeCard = ({
         </Link>
 
         {/* Floating Heart Button */}
-        {(onAddFavourite || onRemoveFavourite || showFavourite || showRemoveFavourite) && (
+        {(onAddFavourite || onRemoveFavourite || showFavourite || showRemoveFavourite) && user?.userType !== 'host' && (
           <button
             type="button"
             onClick={handleHeartClick}
@@ -177,7 +177,7 @@ const HomeCard = ({
             </Link>
           )}
 
-          {showBook && onBook && (
+          {showBook && onBook && user?.userType !== 'host' && (
             <button
               type="button"
               onClick={() => onBook(homeId)}
@@ -201,7 +201,7 @@ const HomeCard = ({
             </button>
           )}
 
-          {showFavourite && onAddFavourite && !isFav && (
+          {showFavourite && onAddFavourite && !isFav && user?.userType !== 'host' && (
             <button
               type="button"
               onClick={() => onAddFavourite(homeId)}
@@ -226,7 +226,7 @@ const HomeCard = ({
             </button>
           )}
 
-          {showFavourite && isFav && !showRemoveFavourite && (
+          {showFavourite && isFav && !showRemoveFavourite && user?.userType !== 'host' && (
             <button
               type="button"
               onClick={() => (onRemoveFavourite ? onRemoveFavourite(homeId) : onAddFavourite(homeId))}
@@ -245,7 +245,7 @@ const HomeCard = ({
             </button>
           )}
 
-          {showRemoveFavourite && onRemoveFavourite && (
+          {showRemoveFavourite && onRemoveFavourite && user?.userType !== 'host' && (
             <button
               type="button"
               onClick={() => onRemoveFavourite(homeId)}

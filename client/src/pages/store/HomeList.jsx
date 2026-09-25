@@ -16,8 +16,12 @@ const HomeList = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (user?.userType === 'host') {
+      navigate('/host/host-home-list', { replace: true });
+      return;
+    }
     fetchHomes();
-  }, []);
+  }, [user]);
 
   const fetchHomes = async () => {
     try {

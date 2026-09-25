@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   getHomeDetails,
   addToFavourite,
@@ -506,7 +506,30 @@ const HomeDetail = () => {
                     : 'Live Virtual Tour'}
                 </button>
 
-                {isLoggedIn ? (
+                {user?.userType === 'host' ? (
+                  <>
+                    {String(user?._id || user?.id) === String(home?.hostId?._id || home?.hostId) && (
+                      <Link
+                        to={`/host/edit-home/${homeId}`}
+                        className="w-full bg-[#A67C52] text-white px-6 py-3.5 rounded-xl hover:bg-[#8B6F47] transition font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-98 text-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                        </svg>
+                        Edit Property Listing
+                      </Link>
+                    )}
+                    <Link
+                      to="/host/host-home-list"
+                      className="w-full bg-white hover:bg-[#FAF7F2] text-[#8B6F47] border border-[#EADBCC] px-6 py-3 rounded-xl transition font-semibold flex items-center justify-center gap-2 text-center shadow-xs"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+                      </svg>
+                      Back to Host Homes
+                    </Link>
+                  </>
+                ) : isLoggedIn ? (
                   <>
                     <button 
                       onClick={handleOpenBookingModal}

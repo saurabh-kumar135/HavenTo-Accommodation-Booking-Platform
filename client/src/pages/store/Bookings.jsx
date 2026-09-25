@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getBookings, cancelBooking, deleteBooking } from '../../services/api';
 import Navbar from '../../components/Navbar';
 import CancelBookingModal from '../../components/CancelBookingModal';
 import { getImageUrl } from '../../config/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 const Bookings = () => {
   const [bookings, setBookings] = useState([]);
@@ -14,10 +15,16 @@ const Bookings = () => {
   const [toastMessage, setToastMessage] = useState(null);
   const [activeTab, setActiveTab] = useState('active'); // 'active' | 'cancelled' | 'all'
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
+    if (user?.userType === 'host') {
+      navigate('/host/host-home-list', { replace: true });
+      return;
+    }
     fetchBookings();
-  }, []);
+  }, [user]);
 
   const fetchBookings = async () => {
     try {

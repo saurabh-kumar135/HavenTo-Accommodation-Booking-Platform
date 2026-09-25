@@ -300,8 +300,9 @@ const Index = () => {
                 key={home._id || home.id} 
                 home={home}
                 showDetails={true}
-                showBook={true}
-                showFavourite={true}
+                showBook={user?.userType !== 'host'}
+                showFavourite={user?.userType !== 'host'}
+                showTour={true}
                 onBook={handleOpenBookingModal}
                 onAddFavourite={handleAddFavourite}
                 onRemoveFavourite={handleRemoveFavourite}
