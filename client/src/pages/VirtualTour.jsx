@@ -170,76 +170,91 @@ export default function VirtualTour() {
       autoGainControl: true
     };
 
-    const requestMediaWithTimeout = (constraints, timeoutMs = 2500) => {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        return Promise.reject(new Error('getUserMedia not supported'));
-      }
-      return Promise.race([
-        navigator.mediaDevices.getUserMedia(constraints),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Media prompt timeout')), timeoutMs))
-      ]);
-    };
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.warn('getUserMedia not supported in this browser environment');
+      return generateSyntheticStream();
+    }
 
     try {
-      // 1. Try full HD video with enhanced audio
-      return await requestMediaWithTimeout({
+      // 1. Primary: Try ideal HD video with audio
+      return await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
         audio: audioConfig
-      }, 2500);
+      });
     } catch (err1) {
+      console.warn('Ideal constraints failed, trying basic video and audio:', err1.name);
       try {
-        // 2. Fallback to basic video + audio
-        return await requestMediaWithTimeout({ video: true, audio: audioConfig }, 1500);
+        // 2. Secondary: Basic video and audio (standard for mobile browsers)
+        return await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: true
+        });
       } catch (err2) {
+        console.warn('Basic constraints failed, trying standard video:', err2.name);
         try {
-          // 3. Fallback to audio only
-          return await requestMediaWithTimeout({ video: false, audio: true }, 1000);
+          // 3. Simple video and audio
+          return await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
+          });
         } catch (err3) {
-          console.warn('Physical camera/mic unavailable or locked. Generating animated canvas stream fallback:', err3.name);
-          // 4. Synthetic animated canvas stream for multi-tab testing on same device
-          const canvas = document.createElement('canvas');
-          canvas.width = 640;
-          canvas.height = 480;
-          const ctx = canvas.getContext('2d');
-          let frame = 0;
-          const draw = () => {
-            frame++;
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(0, 0, 640, 480);
-            ctx.fillStyle = '#ef4444';
-            ctx.font = 'bold 26px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('HavenTo Live Tour', 320, 200);
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '18px sans-serif';
-            ctx.fillText(userName || (userRole === 'host' ? 'Property Host' : 'Prospective Tenant'), 320, 240);
-            ctx.beginPath();
-            ctx.arc(320, 310, 36 + Math.sin(frame * 0.05) * 6, 0, Math.PI * 2);
-            ctx.fillStyle = '#dc2626';
-            ctx.fill();
-            requestAnimationFrame(draw);
-          };
-          draw();
-          const canvasStream = canvas.captureStream(30);
-
           try {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const dst = audioCtx.createMediaStreamDestination();
-            const gain = audioCtx.createGain();
-            gain.gain.value = 0;
-            gain.connect(dst);
-            const silentAudioTrack = dst.stream.getAudioTracks()[0];
-            if (silentAudioTrack) {
-              silentAudioTrack.enabled = false;
-              canvasStream.addTrack(silentAudioTrack);
-            }
-          } catch (audioErr) {
-            console.warn('Silent audio creation skipped:', audioErr);
+            // 4. Video only
+            return await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false
+            });
+          } catch (err4) {
+            console.warn('Physical camera unavailable or permission denied. Generating synthetic stream:', err4.name);
+            return generateSyntheticStream();
           }
-          return canvasStream;
         }
       }
     }
+  };
+
+  // Helper for synthetic animated fallback stream when device camera is denied or hardware-locked
+  const generateSyntheticStream = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+    let frame = 0;
+    const draw = () => {
+      frame++;
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, 640, 480);
+      ctx.fillStyle = '#ef4444';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('HavenTo Live Tour', 320, 200);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '18px sans-serif';
+      ctx.fillText(userName || (userRole === 'host' ? 'Property Host' : 'Prospective Tenant'), 320, 240);
+      ctx.beginPath();
+      ctx.arc(320, 310, 36 + Math.sin(frame * 0.05) * 6, 0, Math.PI * 2);
+      ctx.fillStyle = '#dc2626';
+      ctx.fill();
+      requestAnimationFrame(draw);
+    };
+    draw();
+    const canvasStream = canvas.captureStream(30);
+
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const dst = audioCtx.createMediaStreamDestination();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0;
+      gain.connect(dst);
+      const silentAudioTrack = dst.stream.getAudioTracks()[0];
+      if (silentAudioTrack) {
+        silentAudioTrack.enabled = false;
+        canvasStream.addTrack(silentAudioTrack);
+      }
+    } catch (audioErr) {
+      console.warn('Silent audio creation skipped:', audioErr);
+    }
+    return canvasStream;
   };
 
   // Join the Tour Room
