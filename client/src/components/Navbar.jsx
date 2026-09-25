@@ -86,6 +86,17 @@ const Navbar = ({ currentPage }) => {
                       </Link>
                     </li>
                     <li>
+                      <Link
+                        to="/tour"
+                        className={`${currentPage === 'tour' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]'} py-2 px-4 rounded-lg transition duration-300 flex items-center gap-1.5`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+                        </svg>
+                        Virtual Tour
+                      </Link>
+                    </li>
+                    <li>
                       <button
                         onClick={() => setIsKycModalOpen(true)}
                         className="hover:bg-[#C4A57B] py-2 px-4 rounded-lg transition duration-300 flex items-center text-sm"
@@ -154,6 +165,17 @@ const Navbar = ({ currentPage }) => {
                           <path d="M2.25 18a.75.75 0 0 0 0 1.5c5.4 0 10.63.722 15.6 2.075 1.19.324 2.4-.558 2.4-1.82V18.75a.75.75 0 0 0-.75-.75H2.25Z" />
                         </svg>
                         Host Earnings
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        to="/tour"
+                        className={(currentPage === 'tour' ? 'bg-[#A67C52] font-medium' : 'hover:bg-[#C4A57B]') + ' py-2 px-4 rounded-lg transition duration-300 flex items-center gap-1.5'}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+                        </svg>
+                        Virtual Tour
                       </Link>
                     </li>
                     <li>

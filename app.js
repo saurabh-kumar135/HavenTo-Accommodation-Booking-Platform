@@ -22,6 +22,10 @@ const passwordResetRouter = require("./routes/passwordResetRoutes")
 const emailVerificationRouter = require("./routes/emailVerificationRoutes")
 const agentRouter = require("./routes/agentRouter");
 const analyticsRouter = require("./routes/analyticsRouter");
+const virtualTourRouter = require("./routes/virtualTourRoutes");
+const http = require('http');
+const { Server } = require('socket.io');
+const { initVirtualTourSignaling } = require('./services/virtualTourSignaling');
 const rootDir = require("./utils/pathUtil");
 const errorsController = require("./controllers/errors");
 const { apiLimiter } = require('./middleware/rateLimiter');
@@ -160,6 +164,7 @@ app.use('/api/', apiLimiter);
 app.use(authRouter);
 app.use('/api/password-reset', passwordResetRouter);
 app.use('/api/verify-email', emailVerificationRouter);
+app.use('/api/virtual-tour', virtualTourRouter);
  
 app.use(storeRouter);
 app.use(hostRouter);
@@ -170,14 +175,32 @@ app.use(errorsController.pageNotFound);
 
 const PORT = process.env.PORT || 3009;
 
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (origin.includes('vercel.app') || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      callback(null, true);
+    },
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
+initVirtualTourSignaling(io);
+
 let gfsBucket;
 
 mongoose.connect(DB_PATH).then(() => {
   console.log('Connected to Mongo');
   gfsBucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'photos' });
   app.locals.gfsBucket = gfsBucket;
-  app.listen(PORT, () => {
-    console.log(`Server running on address http://localhost:${PORT}`);
+  server.listen(PORT, () => {
+    console.log(`Server running with Virtual Tour on address http://localhost:${PORT}`);
   });
 }).catch(err => {
   console.log('Error while connecting to Mongo: ', err);

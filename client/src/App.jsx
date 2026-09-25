@@ -19,6 +19,7 @@ import AddEditHome from './pages/host/AddEditHome';
 import HostHomeList from './pages/host/HostHomeList';
 import PricingIntelligence from './pages/host/PricingIntelligence';
 import HostWealthDashboard from './pages/host/HostWealthDashboard';
+import VirtualTour from './pages/VirtualTour';
 
 import NotFound from './pages/NotFound';
 import AIChatWidget from './components/AIChatWidget';
@@ -41,6 +42,8 @@ function App() {
               <Route path="/reset-password/:token" element={<ResetPassword />} />
               <Route path="/homes" element={<HomeList />} />
               <Route path="/homes/:homeId" element={<HomeDetail />} />
+              <Route path="/tour" element={<VirtualTour />} />
+              <Route path="/tour/:roomId" element={<VirtualTour />} />
               
               {}
               <Route path="/favourites" element={

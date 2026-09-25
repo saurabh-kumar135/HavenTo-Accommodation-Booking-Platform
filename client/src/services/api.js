@@ -75,4 +75,9 @@ export const getHostKycStatus = () => api.get('/api/host/kyc-status');
 // Host Wealth & Revenue Analytics
 export const getHostWealthAnalytics = () => api.get('/api/host/wealth-analytics');
 
+// Virtual Tour APIs
+export const getActiveTourRooms = () => api.get('/api/virtual-tour/active');
+export const getTourConfig = () => api.get('/api/virtual-tour/config');
+export const createTourRoom = (tourData) => api.post('/api/virtual-tour/create', tourData);
+
 export default api;
