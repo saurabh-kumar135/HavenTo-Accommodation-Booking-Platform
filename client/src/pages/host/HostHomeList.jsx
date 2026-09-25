@@ -165,6 +165,7 @@ const HostHomeList = () => {
                   home={home}
                   showDetails={true}
                   showBook={true}
+                  showTour={true}
                   onBook={handleOpenBookingModal}
                   showEdit={true}
                   showDelete={true}

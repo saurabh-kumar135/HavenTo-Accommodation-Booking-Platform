@@ -23,6 +23,7 @@ import VirtualTour from './pages/VirtualTour';
 
 import NotFound from './pages/NotFound';
 import AIChatWidget from './components/AIChatWidget';
+import IncomingTourCallListener from './components/IncomingTourCallListener';
 
 import './index.css';
 
@@ -104,6 +105,8 @@ function App() {
             </Routes>
             {/* AI Chat Widget - floating on all pages */}
             <AIChatWidget />
+            {/* Real-time WebRTC Virtual Tour incoming call alerts for hosts */}
+            <IncomingTourCallListener />
           </div>
         </Router>
       </ToastProvider>

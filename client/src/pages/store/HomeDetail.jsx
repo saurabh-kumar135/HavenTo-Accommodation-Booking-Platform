@@ -56,8 +56,14 @@ const HomeDetail = () => {
   };
 
   const handleStartVirtualTour = () => {
-    const tourRoomId = `tour_${homeId.slice(-6)}_${Math.random().toString(36).substr(2, 4)}`;
-    navigate(`/tour/${tourRoomId}?homeId=${homeId}`, { state: { home, homeId } });
+    const tourRoomId = `property_${homeId}`;
+    navigate(`/tour/${tourRoomId}?homeId=${homeId}`, { 
+      state: { 
+        home, 
+        homeId,
+        hostId: home?.hostId?._id || home?.hostId
+      } 
+    });
   };
 
   const handleToggleFavourite = async () => {
@@ -488,18 +494,20 @@ const HomeDetail = () => {
               </div>
               
               <div className="space-y-3">
+                <button 
+                  onClick={handleStartVirtualTour}
+                  className="w-full bg-gradient-to-r from-red-600 to-rose-600 text-white px-6 py-3.5 rounded-xl hover:from-red-500 hover:to-rose-500 transition font-bold flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 group active:scale-98"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:scale-110 transition-transform">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+                  </svg>
+                  {user && String(user._id || user.id) === String(home?.hostId?._id || home?.hostId)
+                    ? 'Enter Tour Room (Host)'
+                    : 'Live Virtual Tour'}
+                </button>
+
                 {isLoggedIn ? (
                   <>
-                    <button 
-                      onClick={handleStartVirtualTour}
-                      className="w-full bg-gradient-to-r from-red-600 to-rose-600 text-white px-6 py-3.5 rounded-xl hover:from-red-500 hover:to-rose-500 transition font-bold flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 group active:scale-98"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:scale-110 transition-transform">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
-                      </svg>
-                      Live Virtual Tour
-                    </button>
-
                     <button 
                       onClick={handleOpenBookingModal}
                       className="w-full bg-[#A67C52] text-white px-6 py-3.5 rounded-xl hover:bg-[#8B6F47] transition font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-98"

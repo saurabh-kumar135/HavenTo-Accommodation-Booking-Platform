@@ -4,14 +4,24 @@
  * in-tour live chat, media status toggling, and tour reservation intents.
  */
 
+const Home = require('../models/home');
+
 const tourRooms = new Map(); // roomId -> { homeId, participants: Map(socketId -> userInfo), createdAt }
 
 function initVirtualTourSignaling(io) {
   io.on('connection', (socket) => {
     console.log('🔌 Client connected for Virtual Tour:', socket.id);
 
+    // Register user details for direct notifications
+    socket.on('register-user', ({ userId, role, name }) => {
+      socket.registeredUserId = userId ? String(userId) : null;
+      socket.registeredRole = role;
+      socket.registeredName = name;
+      console.log(`👤 User registered on socket ${socket.id}: ${name} (${role}, id: ${userId})`);
+    });
+
     // Join a Virtual Tour room
-    socket.on('join-tour-room', ({ roomId, homeId, user }) => {
+    socket.on('join-tour-room', async ({ roomId, homeId, user }) => {
       if (!roomId) return;
 
       socket.join(roomId);
@@ -57,6 +67,80 @@ function initVirtualTourSignaling(io) {
         socketId: socket.id,
         user: socket.user
       });
+
+      // AUTOMATED CONNECTION MECHANISM:
+      // When a guest joins the room, immediately alert the property's host in real-time
+      if (socket.user.role !== 'host' && (homeId || roomData.homeId)) {
+        const targetHomeId = homeId || roomData.homeId;
+        try {
+          const home = await Home.findById(targetHomeId).populate('hostId', 'firstName lastName _id');
+          if (home) {
+            const hostId = home.hostId?._id ? home.hostId._id.toString() : (home.hostId ? home.hostId.toString() : null);
+            const callAlert = {
+              roomId,
+              homeId: targetHomeId,
+              houseName: home.houseName,
+              houseImage: home.photos?.[0] || null,
+              price: home.price,
+              location: home.location,
+              hostId,
+              guestName: socket.user.name || 'A prospective tenant',
+              guestSocketId: socket.id,
+              timestamp: Date.now()
+            };
+            console.log(`📢 Broadcasting incoming-tour-call to host (${hostId || 'all'}) for property: ${home.houseName} [Room: ${roomId}]`);
+            io.emit('incoming-tour-call', callAlert);
+          }
+        } catch (err) {
+          console.warn('Could not query home for host notification:', err.message);
+        }
+      }
+
+      // If a host joins, notify the room that the host has arrived
+      if (socket.user.role === 'host') {
+        io.in(roomId).emit('host-joined-tour', {
+          hostName: socket.user.name,
+          socketId: socket.id
+        });
+      }
+    });
+
+    // Manual Re-ringing handler when guest clicks "Ring Host Again"
+    socket.on('request-host-join', async ({ roomId, homeId, guestName }) => {
+      const targetHomeId = homeId || socket.homeId;
+      const targetRoomId = roomId || socket.roomId;
+      try {
+        let houseName = 'HavenTo Property';
+        let hostId = null;
+        let houseImage = null;
+        let price = null;
+        let location = null;
+        if (targetHomeId) {
+          const home = await Home.findById(targetHomeId).populate('hostId', 'firstName lastName _id');
+          if (home) {
+            houseName = home.houseName;
+            hostId = home.hostId?._id ? home.hostId._id.toString() : (home.hostId ? home.hostId.toString() : null);
+            houseImage = home.photos?.[0] || null;
+            price = home.price;
+            location = home.location;
+          }
+        }
+        console.log(`🔔 Re-ringing host for tour room ${targetRoomId}`);
+        io.emit('incoming-tour-call', {
+          roomId: targetRoomId,
+          homeId: targetHomeId,
+          houseName,
+          houseImage,
+          price,
+          location,
+          hostId,
+          guestName: guestName || socket.user?.name || 'A prospective tenant',
+          guestSocketId: socket.id,
+          timestamp: Date.now()
+        });
+      } catch (err) {
+        console.warn('Error in request-host-join:', err.message);
+      }
     });
 
     // Relay WebRTC Offer

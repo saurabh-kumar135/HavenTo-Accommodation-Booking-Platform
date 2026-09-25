@@ -4,7 +4,8 @@ import { io } from 'socket.io-client';
 import { 
   Video, VideoOff, Mic, MicOff, Monitor, MonitorOff, 
   PhoneOff, MessageSquare, Copy, Check, Users, Home, 
-  Send, X, Sparkles, MapPin, Star, ShieldCheck, Share2
+  Send, X, Sparkles, MapPin, Star, ShieldCheck, Share2,
+  PhoneCall, Bell
 } from 'lucide-react';
 import { getHomeDetails, getTourConfig } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -21,9 +22,13 @@ export default function VirtualTour() {
   const queryParams = new URLSearchParams(location.search);
   const homeIdFromQuery = queryParams.get('homeId');
 
+  // Deterministic room & home extraction
+  const effectiveHomeId = homeIdFromQuery || location.state?.homeId || (routeRoomId?.startsWith('property_') ? routeRoomId.replace('property_', '') : '');
+  const effectiveRoomId = routeRoomId || (effectiveHomeId ? `property_${effectiveHomeId}` : 'tour_haven_' + Math.random().toString(36).substr(2, 6));
+
   // Tour & Home Metadata
-  const [roomId, setRoomId] = useState(routeRoomId || 'tour_haven_' + Math.random().toString(36).substr(2, 6));
-  const [homeId, setHomeId] = useState(homeIdFromQuery || location.state?.homeId || '');
+  const [roomId, setRoomId] = useState(effectiveRoomId);
+  const [homeId, setHomeId] = useState(effectiveHomeId);
   const [homeData, setHomeData] = useState(location.state?.home || null);
   const [inCall, setInCall] = useState(false);
   const [userName, setUserName] = useState('');
@@ -31,6 +36,8 @@ export default function VirtualTour() {
   const [copied, setCopied] = useState(false);
   const [interestSent, setInterestSent] = useState(false);
   const [interestAlert, setInterestAlert] = useState(null);
+  const [reRingSent, setReRingSent] = useState(false);
+  const [hostJoinedNotification, setHostJoinedNotification] = useState(null);
 
   // Media Controls
   const [isAudioMuted, setIsAudioMuted] = useState(false);
@@ -69,6 +76,7 @@ export default function VirtualTour() {
       setUserName(user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user.email?.split('@')[0] || 'Guest');
       if (user.userType === 'host') {
         setUserRole('host');
+        setRemoteUserName('Prospective Tenant');
       }
     } else {
       setUserName('Visitor_' + Math.floor(1000 + Math.random() * 9000));
@@ -79,6 +87,12 @@ export default function VirtualTour() {
         .then(res => {
           if (res.data.success) {
             setHomeData(res.data.home);
+            const currentUserId = user?._id || user?.id;
+            const propertyHostId = res.data.home.hostId?._id || res.data.home.hostId;
+            if (currentUserId && String(currentUserId) === String(propertyHostId)) {
+              setUserRole('host');
+              setRemoteUserName('Prospective Tenant');
+            }
           }
         })
         .catch(err => console.warn('Could not load property details:', err));
@@ -188,7 +202,14 @@ export default function VirtualTour() {
     // When another peer joins
     socket.on('tour-user-joined', ({ socketId, user: joiningUser }) => {
       console.log('New peer joined virtual tour:', joiningUser);
-      setRemoteUserName(joiningUser?.name || 'Client');
+      setRemoteUserName(joiningUser?.name || (userRole === 'host' ? 'Prospective Tenant' : 'Property Host'));
+    });
+
+    // When the host enters the room
+    socket.on('host-joined-tour', ({ hostName }) => {
+      setHostJoinedNotification(`${hostName || 'Property Host'} has entered the tour!`);
+      setRemoteUserName(hostName || 'Property Host');
+      setTimeout(() => setHostJoinedNotification(null), 6000);
     });
 
     // Handle incoming WebRTC Offer
@@ -457,6 +478,27 @@ export default function VirtualTour() {
     setTimeout(() => setCopied(false), 3000);
   };
 
+  // Re-ring the host
+  const handleRingHostAgain = () => {
+    if (socketRef.current) {
+      socketRef.current.emit('request-host-join', {
+        roomId,
+        homeId,
+        guestName: userName
+      });
+      setReRingSent(true);
+      setTimeout(() => setReRingSent(false), 5000);
+    }
+  };
+
+  // Share tour link on WhatsApp
+  const handleShareWhatsApp = () => {
+    const tourUrl = window.location.origin + `/tour/${roomId}` + (homeId ? `?homeId=${homeId}` : '');
+    const message = `Hi! I am on HavenTo and would love a live virtual tour of ${homeData?.houseName || 'your property'}. Join my tour room now: ${tourUrl}`;
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+  };
+
   // Leave / Hang Up Call
   const handleHangUp = () => {
     if (localStreamRef.current) {
@@ -508,6 +550,14 @@ export default function VirtualTour() {
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col font-sans">
       <Navbar currentPage="Homes" />
+
+      {/* Host Joined Notification Banner */}
+      {hostJoinedNotification && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce">
+          <PhoneCall className="w-5 h-5 text-white" />
+          <span className="font-semibold text-sm md:text-base">{hostJoinedNotification}</span>
+        </div>
+      )}
 
       {/* Interest Alert Banner */}
       {interestAlert && (
@@ -613,9 +663,9 @@ export default function VirtualTour() {
 
             <button
               onClick={handleJoinTour}
-              className="w-full py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-2xl shadow-xl shadow-red-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2 text-lg"
+              className="w-full py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-2xl shadow-xl shadow-red-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2 text-lg active:scale-98"
             >
-              <Video className="w-6 h-6" /> Start / Join Tour
+              <Video className="w-6 h-6" /> {userRole === 'host' ? 'Start Tour as Property Host' : 'Start / Join Tour (Alerts Host)'}
             </button>
           </div>
         </div>
@@ -664,12 +714,65 @@ export default function VirtualTour() {
                   className={`w-full h-full object-cover ${!remoteConnected ? 'hidden' : ''}`}
                 />
                 {!remoteConnected && (
-                  <div className="text-center p-6 space-y-3">
-                    <div className="w-16 h-16 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto text-slate-400">
-                      <Users className="w-8 h-8" />
+                  <div className="text-center p-6 max-w-xs sm:max-w-sm mx-auto space-y-4">
+                    <div className="relative mx-auto w-16 h-16 sm:w-20 sm:h-20">
+                      <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping"></div>
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-800 border-2 border-emerald-500/50 flex items-center justify-center text-emerald-400 relative">
+                        <PhoneCall className="w-7 h-7 sm:w-8 sm:h-8 animate-bounce" />
+                      </div>
                     </div>
-                    <p className="text-slate-300 font-semibold">{remoteUserName}</p>
-                    <p className="text-xs text-slate-500 animate-pulse">Waiting for host or guest to connect...</p>
+                    <div>
+                      <p className="text-white font-bold text-sm sm:text-base">{remoteUserName}</p>
+                      <p className="text-xs text-emerald-400 font-medium mt-1 flex items-center justify-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        {userRole === 'guest'
+                          ? 'Host notified in real-time. Waiting to connect...'
+                          : 'Waiting for prospective tenant to enter room...'}
+                      </p>
+                    </div>
+
+                    {userRole === 'guest' ? (
+                      <div className="pt-2 space-y-2">
+                        <button
+                          type="button"
+                          onClick={handleRingHostAgain}
+                          disabled={reRingSent}
+                          className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-xl border border-slate-700 transition flex items-center justify-center gap-2 active:scale-95"
+                        >
+                          <Bell className="w-3.5 h-3.5 text-amber-400" />
+                          {reRingSent ? 'Sent Ring Alert to Host!' : 'Ring Host Again'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleShareWhatsApp}
+                          className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white rounded-xl transition flex items-center justify-center gap-2 shadow-sm active:scale-95"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                          Share Tour on WhatsApp
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="pt-2 space-y-2">
+                        <button
+                          type="button"
+                          onClick={handleCopyLink}
+                          className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-xl border border-slate-700 transition flex items-center justify-center gap-2 active:scale-95"
+                        >
+                          {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copied ? 'Link Copied!' : 'Copy Tour Room Link'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleShareWhatsApp}
+                          className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white rounded-xl transition flex items-center justify-center gap-2 shadow-sm active:scale-95"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                          Send Link via WhatsApp
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200">
