@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { 
   Video, VideoOff, Mic, MicOff, Monitor, MonitorOff, 
   PhoneOff, MessageSquare, Copy, Check, Users, Home, 
-  Send, X, Sparkles, MapPin, Star, ShieldCheck, Share2,
-  PhoneCall, Bell, Radio, ArrowRight, Play
+  Send, X, Sparkles, MapPin, ShieldCheck, Share2,
+  PhoneCall, Bell, Radio, Play, ChevronRight
 } from 'lucide-react';
 import { getHomeDetails, getTourConfig, getActiveTourRooms } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -113,7 +113,7 @@ export default function VirtualTour() {
       })
       .catch(() => {});
 
-    // Polling active tour rooms every 3 seconds for 1-click room joining
+    // Polling active tour rooms every 3.5 seconds
     const fetchRooms = async () => {
       try {
         const res = await getActiveTourRooms();
@@ -141,7 +141,7 @@ export default function VirtualTour() {
   useEffect(() => {
     if (inCall && localVideoRef.current && localStreamRef.current) {
       localVideoRef.current.srcObject = localStreamRef.current;
-      localVideoRef.current.play().catch(e => console.log('Local video play warning:', e));
+      localVideoRef.current.play().catch(e => console.log('Local stream play warning:', e));
     }
     if (inCall && remoteVideoRef.current && remoteStreamRef.current) {
       remoteVideoRef.current.srcObject = remoteStreamRef.current;
@@ -162,7 +162,7 @@ export default function VirtualTour() {
     }
   };
 
-  // Resilient Media Stream acquisition with camera/mic timeouts and animated canvas fallback
+  // Resilient Media Stream acquisition without artificial timeouts
   const getMediaStream = async () => {
     const audioConfig = {
       echoCancellation: true,
@@ -213,7 +213,7 @@ export default function VirtualTour() {
     }
   };
 
-  // Helper for synthetic animated fallback stream when device camera is denied or hardware-locked
+  // Helper for HavenTo luxury-branded synthetic fallback stream
   const generateSyntheticStream = () => {
     const canvas = document.createElement('canvas');
     canvas.width = 640;
@@ -222,19 +222,33 @@ export default function VirtualTour() {
     let frame = 0;
     const draw = () => {
       frame++;
-      ctx.fillStyle = '#0f172a';
+      // Warm HavenTo espresso background
+      ctx.fillStyle = '#1F1B16';
       ctx.fillRect(0, 0, 640, 480);
-      ctx.fillStyle = '#ef4444';
-      ctx.font = 'bold 26px sans-serif';
+      
+      // HavenTo Gold Title
+      ctx.fillStyle = '#D4B896';
+      ctx.font = 'bold 24px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('HavenTo Live Tour', 320, 200);
-      ctx.fillStyle = '#94a3b8';
+      ctx.fillText('HavenTo Live Tour', 320, 195);
+      
+      // User Name in warm ivory
+      ctx.fillStyle = '#FAF7F2';
       ctx.font = '18px sans-serif';
-      ctx.fillText(userName || (userRole === 'host' ? 'Property Host' : 'Prospective Tenant'), 320, 240);
+      ctx.fillText(userName || (userRole === 'host' ? 'Property Host' : 'Prospective Tenant'), 320, 235);
+      
+      // Pulsing HavenTo caramel indicator
       ctx.beginPath();
       ctx.arc(320, 310, 36 + Math.sin(frame * 0.05) * 6, 0, Math.PI * 2);
-      ctx.fillStyle = '#dc2626';
+      ctx.fillStyle = '#A67C52';
       ctx.fill();
+      
+      // Inner glowing core
+      ctx.beginPath();
+      ctx.arc(320, 310, 18, 0, Math.PI * 2);
+      ctx.fillStyle = '#D4B896';
+      ctx.fill();
+      
       requestAnimationFrame(draw);
     };
     draw();
@@ -299,9 +313,8 @@ export default function VirtualTour() {
     socket.on('tour-room-joined', async ({ participants }) => {
       console.log('Room joined, existing peers:', participants);
       if (participants && participants.length > 0) {
-        const peer = participants[0]; // 1-on-1 virtual walkthrough
+        const peer = participants[0];
         setRemoteUserName(peer.user?.name || (userRole === 'host' ? 'Prospective Tenant' : 'Property Host'));
-        // As the newly joined participant, initiate the WebRTC offer
         initiatePeerConnection(peer.socketId, true);
       }
     });
@@ -310,13 +323,12 @@ export default function VirtualTour() {
     socket.on('tour-user-joined', async ({ socketId, user: joiningUser }) => {
       console.log('Peer joined room:', joiningUser);
       setRemoteUserName(joiningUser?.name || (userRole === 'host' ? 'Prospective Tenant' : 'Property Host'));
-      // Prepare peer connection to receive incoming offer with local tracks attached
       initiatePeerConnection(socketId, false);
     });
 
     // When the host enters the room
     socket.on('host-joined-tour', ({ hostName }) => {
-      setHostJoinedNotification(`${hostName || 'Property Host'} has entered the tour!`);
+      setHostJoinedNotification(`${hostName || 'Property Host'} has entered the walkthrough!`);
       setRemoteUserName(hostName || 'Property Host');
       setTimeout(() => setHostJoinedNotification(null), 6000);
     });
@@ -680,12 +692,12 @@ export default function VirtualTour() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col font-sans">
-      <Navbar currentPage="Homes" />
+    <div className="min-h-screen bg-[#FAF7F2] text-gray-900 flex flex-col font-sans">
+      <Navbar currentPage="tour" />
 
       {/* Host Joined Notification Banner */}
       {hostJoinedNotification && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#A67C52] text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-bounce border border-[#8B6F47]">
           <PhoneCall className="w-5 h-5 text-white" />
           <span className="font-semibold text-sm md:text-base">{hostJoinedNotification}</span>
         </div>
@@ -693,83 +705,101 @@ export default function VirtualTour() {
 
       {/* Interest Alert Banner */}
       {interestAlert && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-700 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-bounce border border-emerald-600">
           <Sparkles className="w-5 h-5 text-yellow-300" />
           <span className="font-semibold text-sm md:text-base">{interestAlert.message}</span>
         </div>
       )}
 
       {/* ========================================================= */}
-      {/* LOBBY / PRE-CALL VIEW */}
+      {/* LOBBY / PRE-CALL VIEW (MATCHES HAVENTO DESIGN SYSTEM) */}
       {/* ========================================================= */}
       {!inCall ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 py-10 max-w-5xl mx-auto w-full">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold mb-3 tracking-wider uppercase">
-              <Radio className="w-3.5 h-3.5 text-red-500 animate-pulse" /> Live Property Walkthrough
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              Virtual Property Tour
-            </h1>
-            <p className="mt-2 text-sm text-slate-400 max-w-lg mx-auto">
-              Real-time WebRTC 1-on-1 audio/video call between host and prospective tenant. Connect instantly and inspect every room live.
-            </p>
-          </div>
+        <main className="container mx-auto px-4 py-8 max-w-6xl flex-1 flex flex-col justify-center">
+          {/* HavenTo Warm Header Banner */}
+          <div className="bg-gradient-to-r from-[#FAF7F2] to-white border border-[#EADBCC] rounded-2xl p-6 sm:p-8 mb-8 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F5F0E8] text-[#8B6F47] text-xs font-semibold uppercase tracking-wider mb-2 border border-[#EADBCC]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>Direct WebRTC Walkthrough</span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  Live Virtual Property Tour
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 max-w-xl">
+                  High-definition peer-to-peer audio & video call between host and prospective tenant. Inspect every detail of the property in real time.
+                </p>
+              </div>
 
-          {/* If routeRoomId is present in URL (Direct Link Join Card) */}
-          {routeRoomId ? (
-            <div className="max-w-md w-full bg-slate-900 border border-red-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
-              <div className="flex items-center gap-3 text-red-400">
-                <div className="p-3 bg-red-500/10 rounded-2xl">
-                  <Video className="w-7 h-7" />
+              {/* Quick Status Pill */}
+              <div className="flex items-center gap-3 bg-white px-4 py-3 rounded-xl border border-gray-200 shadow-xs self-start md:self-auto">
+                <div className="p-2 rounded-lg bg-[#F5F0E8] text-[#8B6F47]">
+                  <Radio className="w-5 h-5 animate-pulse" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-white">Join Tour Room</h2>
-                  <p className="text-xs text-slate-400 font-mono">Room: {routeRoomId}</p>
+                  <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Live Status</div>
+                  <div className="text-sm font-extrabold text-gray-900">
+                    {activeRooms.length > 0 ? `${activeRooms.length} Tours Waiting` : 'Ready to Connect'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Direct Room Join Card (When routeRoomId is in URL) */}
+          {routeRoomId ? (
+            <div className="max-w-lg mx-auto w-full bg-white border border-[#EADBCC] rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-[#F5F0E8] text-[#8B6F47] rounded-xl border border-[#EADBCC]">
+                  <Video className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Join Tour Room</h2>
+                  <p className="text-xs text-[#8B6F47] font-mono mt-0.5">Code: {routeRoomId}</p>
                 </div>
               </div>
 
               {homeData && (
-                <div className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-4 flex gap-4 items-center">
+                <div className="bg-[#FAF7F2] border border-[#EADBCC] rounded-xl p-4 flex gap-4 items-center">
                   <img 
                     src={homeData.photos?.[0] ? getImageUrl(homeData.photos[0]) : (homeData.photo ? getImageUrl(homeData.photo) : 'https://via.placeholder.com/150')} 
                     alt={homeData.houseName}
-                    className="w-16 h-16 rounded-xl object-cover"
+                    className="w-16 h-16 rounded-xl object-cover border border-[#EADBCC]"
                   />
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-white truncate text-sm">{homeData.houseName}</h3>
-                    <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5 truncate">
-                      <MapPin className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                    <h3 className="font-semibold text-gray-900 truncate text-sm">{homeData.houseName}</h3>
+                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5 truncate">
+                      <MapPin className="w-3.5 h-3.5 text-[#8B6F47] shrink-0" />
                       {homeData.location}
                     </p>
-                    <p className="text-xs font-bold text-emerald-400 mt-1">₹{homeData.price} <span className="text-[10px] text-slate-400 font-normal">/ night</span></p>
+                    <p className="text-xs font-bold text-[#8B6F47] mt-1">₹{homeData.price?.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-normal">/ night</span></p>
                   </div>
                 </div>
               )}
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Your Name</label>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Your Name</label>
                   <input 
                     type="text" 
                     value={userName} 
                     onChange={(e) => setUserName(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-red-500 transition"
+                    className="w-full bg-[#FAF7F2] border border-[#EADBCC] focus:border-[#A67C52] focus:bg-white text-gray-900 rounded-xl px-4 py-2.5 text-sm transition outline-none"
                     placeholder="Enter your name"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Your Role</label>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Your Role</label>
                   <div className="grid grid-cols-2 gap-2.5">
                     <button
                       type="button"
                       onClick={() => setUserRole('guest')}
-                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                         userRole === 'guest' 
-                          ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30' 
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                          ? 'bg-[#A67C52] border-[#A67C52] text-white shadow-sm' 
+                          : 'bg-[#FAF7F2] border-[#EADBCC] text-gray-700 hover:bg-[#F5F0E8]'
                       }`}
                     >
                       <Users className="w-3.5 h-3.5" /> Tenant
@@ -777,10 +807,10 @@ export default function VirtualTour() {
                     <button
                       type="button"
                       onClick={() => setUserRole('host')}
-                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                         userRole === 'host' 
-                          ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30' 
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                          ? 'bg-[#A67C52] border-[#A67C52] text-white shadow-sm' 
+                          : 'bg-[#FAF7F2] border-[#EADBCC] text-gray-700 hover:bg-[#F5F0E8]'
                       }`}
                     >
                       <Home className="w-3.5 h-3.5" /> Host
@@ -790,7 +820,7 @@ export default function VirtualTour() {
 
                 <button
                   onClick={() => handleJoinTour(routeRoomId)}
-                  className="w-full py-3.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-2xl shadow-xl shadow-red-600/30 transition flex items-center justify-center gap-2 text-sm"
+                  className="w-full py-3.5 bg-[#A67C52] hover:bg-[#8B6F47] text-white font-bold rounded-xl shadow-sm transition flex items-center justify-center gap-2 text-sm active:scale-98"
                 >
                   <Video className="w-5 h-5" /> Join Tour Room Now
                 </button>
@@ -799,28 +829,28 @@ export default function VirtualTour() {
               <div className="pt-2 text-center">
                 <button
                   onClick={() => navigate('/tour')}
-                  className="text-xs text-slate-400 hover:text-white transition"
+                  className="text-xs text-[#8B6F47] hover:underline font-semibold"
                 >
                   Browse all active tour rooms &rarr;
                 </button>
               </div>
             </div>
           ) : (
-            /* Multi-Card Lobby View */
+            /* HavenTo Multi-Card Lobby View */
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full items-start">
               {/* CARD 1: ACTIVE LIVE WAITING ROOMS & QUICK DEMO */}
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
+              <div className="bg-white border border-[#EADBCC] rounded-2xl p-6 shadow-sm space-y-5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
+                    <div className="p-2.5 bg-[#F5F0E8] text-[#8B6F47] rounded-xl border border-[#EADBCC]">
                       <Radio className="w-5 h-5 animate-pulse" />
                     </div>
                     <div>
-                      <h2 className="text-base font-bold text-white">Live Active Tours</h2>
-                      <p className="text-xs text-slate-400">Open rooms waiting for connection</p>
+                      <h2 className="text-base font-bold text-gray-900">Live Active Tours</h2>
+                      <p className="text-xs text-gray-500">Open rooms waiting for connection</p>
                     </div>
                   </div>
-                  <span className="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full font-semibold border border-slate-700">
+                  <span className="text-xs bg-[#FAF7F2] text-[#8B6F47] border border-[#EADBCC] px-2.5 py-1 rounded-full font-bold">
                     {activeRooms.length} Active
                   </span>
                 </div>
@@ -828,32 +858,32 @@ export default function VirtualTour() {
                 {/* Active Rooms List */}
                 <div className="space-y-3 min-h-[140px]">
                   {activeRooms.length === 0 ? (
-                    <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 text-center text-xs text-slate-400 space-y-2">
-                      <p className="font-medium text-slate-300">No rooms currently waiting</p>
-                      <p className="text-[11px] text-slate-500">
-                        Start a new tour room using the card on the right, or click the Quick Demo below to test instantly!
+                    <div className="bg-[#FAF7F2] border border-dashed border-[#EADBCC] rounded-xl p-5 text-center text-xs text-gray-500 space-y-1.5">
+                      <p className="font-semibold text-gray-700">No rooms currently waiting</p>
+                      <p className="text-[11px] text-gray-400">
+                        Start a new tour room using the card on the right, or click the Quick Demo below to connect instantly!
                       </p>
                     </div>
                   ) : (
                     activeRooms.map((room) => (
                       <div 
                         key={room.roomId}
-                        className="bg-slate-800/80 border border-slate-700 rounded-2xl p-3.5 flex items-center justify-between gap-3 hover:border-red-500/50 transition group"
+                        className="bg-[#FAF7F2] border border-[#EADBCC] rounded-xl p-3.5 flex items-center justify-between gap-3 hover:border-[#A67C52] transition group"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
-                            <span className="font-semibold text-xs text-white truncate">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0"></span>
+                            <span className="font-bold text-xs text-gray-900 truncate">
                               {room.houseName || room.roomId}
                             </span>
                           </div>
-                          <p className="text-[11px] text-slate-400 mt-1 truncate">
+                          <p className="text-[11px] text-gray-500 mt-1 truncate">
                             Waiting: {room.participants?.map(p => `${p.name || 'User'} (${p.role})`).join(', ') || '1 participant'}
                           </p>
                         </div>
                         <button
                           onClick={() => handleJoinTour(room.roomId)}
-                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 shrink-0 group-hover:scale-105 active:scale-95"
+                          className="px-3.5 py-2 bg-[#A67C52] hover:bg-[#8B6F47] text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 shrink-0 group-hover:scale-105 active:scale-95"
                         >
                           <Video className="w-3.5 h-3.5" /> Join Call
                         </button>
@@ -863,56 +893,56 @@ export default function VirtualTour() {
                 </div>
 
                 {/* Quick 1-Click Demo Tour Button */}
-                <div className="pt-2 border-t border-slate-800/80">
-                  <div className="text-[11px] text-slate-400 mb-2 font-medium">Instant 2-Party Test Room:</div>
+                <div className="pt-3 border-t border-[#EADBCC]">
+                  <div className="text-[11px] text-gray-500 mb-2 font-semibold uppercase tracking-wider">Instant 2-Party Test Room:</div>
                   <button
                     type="button"
                     onClick={() => handleJoinTour('haven_demo_tour')}
-                    className="w-full py-3 px-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-2xl shadow-lg shadow-red-600/20 text-xs sm:text-sm transition flex items-center justify-center gap-2 active:scale-98"
+                    className="w-full py-3 px-4 bg-gradient-to-r from-[#A67C52] to-[#8B6F47] hover:from-[#8B6F47] hover:to-[#735A38] text-white font-bold rounded-xl shadow-sm text-xs sm:text-sm transition flex items-center justify-center gap-2 active:scale-98"
                   >
                     <Play className="w-4 h-4 fill-white" /> Quick Connect Demo Tour (haven_demo_tour)
                   </button>
-                  <p className="text-[11px] text-slate-500 mt-1.5 text-center">
-                    Both host and guest can click this to instantly join the same room without codes.
+                  <p className="text-[11px] text-gray-400 mt-1.5 text-center">
+                    Both host and guest can click this to instantly join the exact same walkthrough without codes.
                   </p>
                 </div>
               </div>
 
               {/* CARD 2: START NEW TOUR OR ENTER CODE */}
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
+              <div className="bg-white border border-[#EADBCC] rounded-2xl p-6 shadow-sm space-y-5">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-red-500/10 text-red-400 rounded-xl">
+                  <div className="p-2.5 bg-[#F5F0E8] text-[#8B6F47] rounded-xl border border-[#EADBCC]">
                     <Video className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-white">Start / Custom Tour</h2>
-                    <p className="text-xs text-slate-400">Launch a private room or enter a code</p>
+                    <h2 className="text-base font-bold text-gray-900">Start / Custom Tour</h2>
+                    <p className="text-xs text-gray-500">Launch a private room or enter a code</p>
                   </div>
                 </div>
 
                 {/* Display Name Input */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Your Name</label>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Your Name</label>
                   <input 
                     type="text" 
                     value={userName} 
                     onChange={(e) => setUserName(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-xs sm:text-sm focus:outline-none focus:border-red-500 transition"
+                    className="w-full bg-[#FAF7F2] border border-[#EADBCC] text-gray-900 focus:border-[#A67C52] focus:bg-white rounded-xl px-4 py-2.5 text-xs sm:text-sm transition outline-none"
                     placeholder="Enter your name"
                   />
                 </div>
 
                 {/* Role Switcher */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Your Role</label>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Your Role</label>
                   <div className="grid grid-cols-2 gap-2.5">
                     <button
                       type="button"
                       onClick={() => setUserRole('guest')}
-                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                         userRole === 'guest' 
-                          ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30' 
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                          ? 'bg-[#A67C52] border-[#A67C52] text-white shadow-sm' 
+                          : 'bg-[#FAF7F2] border border-[#EADBCC] text-gray-700 hover:bg-[#F5F0E8]'
                       }`}
                     >
                       <Users className="w-3.5 h-3.5" /> Tenant
@@ -920,10 +950,10 @@ export default function VirtualTour() {
                     <button
                       type="button"
                       onClick={() => setUserRole('host')}
-                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                         userRole === 'host' 
-                          ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/30' 
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                          ? 'bg-[#A67C52] border-[#A67C52] text-white shadow-sm' 
+                          : 'bg-[#FAF7F2] border border-[#EADBCC] text-gray-700 hover:bg-[#F5F0E8]'
                       }`}
                     >
                       <Home className="w-3.5 h-3.5" /> Property Host
@@ -933,19 +963,19 @@ export default function VirtualTour() {
 
                 {/* Join by Specific Room Code */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Enter Room Code or Property ID</label>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Enter Room Code or Property ID</label>
                   <div className="flex gap-2">
                     <input 
                       type="text" 
                       value={joinCodeInput} 
                       onChange={(e) => setJoinCodeInput(e.target.value)}
                       placeholder="e.g. haven_demo_tour or property_123"
-                      className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-red-500"
+                      className="flex-1 bg-[#FAF7F2] border border-[#EADBCC] text-gray-900 focus:border-[#A67C52] focus:bg-white rounded-xl px-3 py-2 text-xs font-mono outline-none"
                     />
                     <button
                       disabled={!joinCodeInput.trim()}
                       onClick={() => handleJoinTour(joinCodeInput.trim())}
-                      className="px-4 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-white rounded-xl border border-slate-700 transition"
+                      className="px-4 bg-[#FAF7F2] hover:bg-[#F5F0E8] text-[#8B6F47] border border-[#EADBCC] disabled:opacity-40 text-xs font-bold rounded-xl transition"
                     >
                       Join
                     </button>
@@ -958,45 +988,45 @@ export default function VirtualTour() {
                     const newId = 'tour_' + Math.random().toString(36).substr(2, 6);
                     handleJoinTour(newId);
                   }}
-                  className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-2xl border border-slate-700 transition flex items-center justify-center gap-2 text-xs sm:text-sm active:scale-98"
+                  className="w-full py-3 px-4 bg-white hover:bg-[#FAF7F2] text-[#8B6F47] border border-[#EADBCC] font-bold rounded-xl transition flex items-center justify-center gap-2 text-xs sm:text-sm active:scale-98 shadow-xs"
                 >
-                  <Video className="w-4 h-4 text-red-400" /> Launch New Room & Get Invite Link
+                  <Video className="w-4 h-4 text-[#A67C52]" /> Launch New Room & Get Invite Link
                 </button>
               </div>
             </div>
           )}
 
           {/* Security & Direct Peer-to-Peer Footer Badge */}
-          <div className="mt-10 p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center gap-3 text-xs text-slate-400 max-w-xl">
-            <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+          <div className="mt-8 p-4 rounded-2xl bg-white border border-[#EADBCC] flex items-center gap-3 text-xs text-gray-600 shadow-sm max-w-xl mx-auto">
+            <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
             <div>
-              <span className="text-slate-200 font-semibold">End-to-End Encrypted WebRTC</span>: Video and audio stream directly between participants with low-latency and no middleman recording.
+              <span className="text-gray-900 font-bold">End-to-End Encrypted WebRTC</span>: Video and audio stream directly between participants with low latency and zero intermediary recording.
             </div>
           </div>
-        </div>
+        </main>
       ) : (
         /* ========================================================= */
-        /* ACTIVE IN-CALL VIEW */
+        /* ACTIVE IN-CALL VIEW (LUXURY HAVENTO VIDEO ARENA) */
         /* ========================================================= */
-        <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden bg-[#181512]">
           {/* Main Video Arena */}
-          <div className="flex-1 flex flex-col bg-black relative p-3 md:p-6 overflow-hidden">
+          <div className="flex-1 flex flex-col relative p-3 md:p-6 overflow-hidden">
             {/* Top Tour Info Bar */}
             <div className="absolute top-6 left-6 right-6 z-20 flex justify-between items-center pointer-events-none">
-              <div className="bg-slate-900/85 backdrop-blur-md border border-slate-700/60 rounded-2xl px-4 py-2 pointer-events-auto flex items-center gap-3 shadow-lg">
-                <span className={`w-2.5 h-2.5 rounded-full ${remoteConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-ping'}`}></span>
-                <span className="text-xs md:text-sm font-semibold truncate max-w-[180px] md:max-w-xs">
+              <div className="bg-white/95 backdrop-blur-md border border-[#EADBCC] rounded-2xl px-4 py-2 pointer-events-auto flex items-center gap-3 shadow-lg">
+                <span className={`w-2.5 h-2.5 rounded-full ${remoteConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-ping'}`}></span>
+                <span className="text-xs md:text-sm font-bold text-gray-900 truncate max-w-[180px] md:max-w-xs">
                   {homeData?.houseName || (roomId === 'haven_demo_tour' ? 'HavenTo Demo Tour' : `Tour: ${roomId}`)}
                 </span>
-                <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono">
+                <span className="text-[10px] bg-[#F5F0E8] text-[#8B6F47] px-2 py-0.5 rounded-md font-mono border border-[#EADBCC]">
                   {roomId}
                 </span>
                 <button
                   onClick={handleCopyLink}
-                  className="p-1 hover:text-red-400 text-slate-400 transition"
+                  className="p-1 hover:text-[#8B6F47] text-gray-400 transition"
                   title="Copy link to invite others"
                 >
-                  {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
+                  {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4" />}
                 </button>
               </div>
 
@@ -1005,7 +1035,7 @@ export default function VirtualTour() {
                 <button
                   onClick={handleExpressInterest}
                   disabled={interestSent}
-                  className="pointer-events-auto bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold text-xs md:text-sm px-4 py-2 rounded-xl shadow-lg shadow-emerald-500/30 flex items-center gap-1.5 transition"
+                  className="pointer-events-auto bg-[#A67C52] hover:bg-[#8B6F47] text-white font-bold text-xs md:text-sm px-4 py-2 rounded-xl shadow-md flex items-center gap-1.5 transition"
                 >
                   <Sparkles className="w-4 h-4" />
                   {interestSent ? 'Interest Sent to Host!' : 'I Want to Reserve!'}
@@ -1016,7 +1046,7 @@ export default function VirtualTour() {
             {/* Video Streams Container */}
             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 items-center justify-center relative mt-14 mb-20">
               {/* Remote Participant Video */}
-              <div className="w-full h-full min-h-[280px] bg-slate-900 border border-slate-800 rounded-3xl relative overflow-hidden flex items-center justify-center shadow-2xl">
+              <div className="w-full h-full min-h-[280px] bg-[#1F1B16] border-2 border-[#3D332A] rounded-2xl relative overflow-hidden flex items-center justify-center shadow-2xl">
                 <video 
                   ref={remoteVideoRef} 
                   autoPlay 
@@ -1024,23 +1054,23 @@ export default function VirtualTour() {
                   className="w-full h-full object-cover"
                 />
                 {!remoteConnected && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/95 text-center p-6 space-y-4">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#181512]/95 backdrop-blur-md text-center p-6 space-y-4">
                     <div className="relative mx-auto w-16 h-16 sm:w-20 sm:h-20">
-                      <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping"></div>
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-800 border-2 border-emerald-500/50 flex items-center justify-center text-emerald-400 relative shadow-lg">
+                      <div className="absolute inset-0 rounded-full bg-[#A67C52]/20 animate-ping"></div>
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#1F1B16] border-2 border-[#A67C52]/50 flex items-center justify-center text-[#D4B896] relative shadow-lg">
                         <PhoneCall className="w-7 h-7 sm:w-8 sm:h-8 animate-bounce" />
                       </div>
                     </div>
                     <div>
-                      <p className="text-white font-bold text-sm sm:text-base">{remoteUserName}</p>
-                      <p className="text-xs text-emerald-400 font-medium mt-1 flex items-center justify-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <p className="text-[#FAF7F2] font-bold text-sm sm:text-base">{remoteUserName}</p>
+                      <p className="text-xs text-[#D4B896] font-medium mt-1 flex items-center justify-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#D4B896] animate-pulse"></span>
                         {userRole === 'guest'
                           ? 'Waiting for host to enter room...'
                           : 'Waiting for prospective tenant to enter room...'}
                       </p>
-                      <p className="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">
-                        Share room code <span className="text-red-400 font-mono font-bold">{roomId}</span> with the other person.
+                      <p className="text-[11px] text-stone-400 mt-1 max-w-xs mx-auto">
+                        Share room code <span className="text-[#D4B896] font-mono font-bold">{roomId}</span> with the other person.
                       </p>
                     </div>
 
@@ -1048,9 +1078,9 @@ export default function VirtualTour() {
                       <button
                         type="button"
                         onClick={handleCopyLink}
-                        className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-xl border border-slate-700 transition flex items-center justify-center gap-2 active:scale-95"
+                        className="w-full py-2.5 px-3 bg-[#A67C52] hover:bg-[#8B6F47] text-xs font-bold text-white rounded-xl transition flex items-center justify-center gap-2 active:scale-95 shadow-sm"
                       >
-                        {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copied ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
                         {copied ? 'Link Copied to Clipboard!' : 'Copy Tour Room Link'}
                       </button>
 
@@ -1068,7 +1098,7 @@ export default function VirtualTour() {
                           type="button"
                           onClick={handleRingHostAgain}
                           disabled={reRingSent}
-                          className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 rounded-xl border border-slate-800 transition flex items-center justify-center gap-1.5"
+                          className="w-full py-2 px-3 bg-[#1F1B16] hover:bg-black text-[11px] font-semibold text-stone-300 rounded-xl border border-[#3D332A] transition flex items-center justify-center gap-1.5"
                         >
                           <Bell className="w-3 h-3 text-amber-400" />
                           {reRingSent ? 'Notification Sent to Host!' : 'Alert Host in Real-Time'}
@@ -1077,7 +1107,7 @@ export default function VirtualTour() {
                     </div>
                   </div>
                 )}
-                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200 flex items-center gap-2">
+                <div className="absolute bottom-3 left-3 bg-[#1F1B16]/85 backdrop-blur-md border border-[#3D332A] px-3 py-1.5 rounded-lg text-xs font-semibold text-[#FAF7F2] flex items-center gap-2">
                   {remoteConnected && <span className="w-2 h-2 rounded-full bg-emerald-400"></span>}
                   <span>{remoteUserName}</span>
                   {peerScreenSharing && <span className="text-[10px] text-amber-300 font-semibold">(Screen Sharing)</span>}
@@ -1085,7 +1115,7 @@ export default function VirtualTour() {
               </div>
 
               {/* Local Participant Video */}
-              <div className="w-full h-full min-h-[280px] bg-slate-900 border border-slate-800 rounded-3xl relative overflow-hidden flex items-center justify-center shadow-2xl">
+              <div className="w-full h-full min-h-[280px] bg-[#1F1B16] border-2 border-[#3D332A] rounded-2xl relative overflow-hidden flex items-center justify-center shadow-2xl">
                 <video 
                   ref={localVideoRef} 
                   autoPlay 
@@ -1095,27 +1125,27 @@ export default function VirtualTour() {
                 />
                 {isVideoOff && (
                   <div className="text-center p-6 space-y-3">
-                    <div className="w-16 h-16 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto text-slate-400">
+                    <div className="w-16 h-16 rounded-full bg-[#1F1B16] border border-[#3D332A] flex items-center justify-center mx-auto text-stone-400">
                       <VideoOff className="w-8 h-8" />
                     </div>
-                    <p className="text-slate-300 font-semibold">{userName} (You)</p>
-                    <p className="text-xs text-slate-500">Camera is turned off</p>
+                    <p className="text-[#FAF7F2] font-semibold">{userName} (You)</p>
+                    <p className="text-xs text-stone-500">Camera is turned off</p>
                   </div>
                 )}
-                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200 flex items-center gap-2">
+                <div className="absolute bottom-3 left-3 bg-[#1F1B16]/85 backdrop-blur-md border border-[#3D332A] px-3 py-1.5 rounded-lg text-xs font-semibold text-[#FAF7F2] flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                   <span>{userName} (You - {userRole === 'host' ? 'Host' : 'Guest'})</span>
-                  {isAudioMuted && <MicOff className="w-3.5 h-3.5 text-red-400" />}
+                  {isAudioMuted && <MicOff className="w-3.5 h-3.5 text-rose-400" />}
                 </div>
               </div>
             </div>
 
-            {/* Bottom Call Controls Bar */}
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-slate-900/90 backdrop-blur-lg border border-slate-800 px-6 py-3 rounded-2xl shadow-2xl">
+            {/* Bottom Call Controls Dock (Matching HavenTo Theme) */}
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-white/95 backdrop-blur-lg border border-[#EADBCC] px-6 py-3 rounded-2xl shadow-xl">
               {/* Mic Toggle */}
               <button 
                 onClick={toggleAudio}
-                className={`p-3 rounded-xl transition ${isAudioMuted ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
+                className={`p-3 rounded-xl transition ${isAudioMuted ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-[#FAF7F2] hover:bg-[#F5F0E8] text-[#8B6F47] border border-[#EADBCC]'}`}
                 title={isAudioMuted ? 'Unmute Mic' : 'Mute Mic'}
               >
                 {isAudioMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -1124,7 +1154,7 @@ export default function VirtualTour() {
               {/* Camera Toggle */}
               <button 
                 onClick={toggleVideo}
-                className={`p-3 rounded-xl transition ${isVideoOff ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
+                className={`p-3 rounded-xl transition ${isVideoOff ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-[#FAF7F2] hover:bg-[#F5F0E8] text-[#8B6F47] border border-[#EADBCC]'}`}
                 title={isVideoOff ? 'Turn Video On' : 'Turn Video Off'}
               >
                 {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
@@ -1133,7 +1163,7 @@ export default function VirtualTour() {
               {/* Screen Sharing Toggle */}
               <button 
                 onClick={toggleScreenShare}
-                className={`p-3 rounded-xl transition ${isScreenSharing ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
+                className={`p-3 rounded-xl transition ${isScreenSharing ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-[#FAF7F2] hover:bg-[#F5F0E8] text-[#8B6F47] border border-[#EADBCC]'}`}
                 title={isScreenSharing ? 'Stop Screen Sharing' : 'Share Screen / Floorplan'}
               >
                 {isScreenSharing ? <MonitorOff className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
@@ -1145,12 +1175,12 @@ export default function VirtualTour() {
                   setChatOpen(!chatOpen);
                   if (!chatOpen) setUnreadCount(0);
                 }}
-                className="p-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl relative transition"
+                className="p-3 bg-[#FAF7F2] hover:bg-[#F5F0E8] text-[#8B6F47] border border-[#EADBCC] rounded-xl relative transition"
                 title="Toggle In-Tour Chat"
               >
                 <MessageSquare className="w-5 h-5" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center font-bold">
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#A67C52] text-white rounded-full text-xs flex items-center justify-center font-bold">
                     {unreadCount}
                   </span>
                 )}
@@ -1159,7 +1189,7 @@ export default function VirtualTour() {
               {/* Leave / Hang Up */}
               <button 
                 onClick={handleHangUp}
-                className="p-3 bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg shadow-red-600/30 transition active:scale-95"
+                className="p-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-md transition active:scale-95"
                 title="Leave Virtual Tour"
               >
                 <PhoneOff className="w-5 h-5" />
@@ -1167,28 +1197,28 @@ export default function VirtualTour() {
             </div>
           </div>
 
-          {/* Right Sidebar: In-Tour Chat & Property Details */}
+          {/* Right Sidebar: In-Tour Chat & Discussion */}
           {chatOpen && (
-            <div className="w-full md:w-80 bg-slate-900 border-l border-slate-800 flex flex-col h-full z-30">
+            <div className="w-full md:w-80 bg-white border-l border-[#EADBCC] flex flex-col h-full z-30 shadow-lg">
               {/* Header */}
-              <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+              <div className="p-4 border-b border-[#EADBCC] bg-[#FAF7F2] flex justify-between items-center text-gray-900">
                 <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-red-400" />
-                  <h3 className="font-bold text-sm">Tour Discussion</h3>
+                  <MessageSquare className="w-4 h-4 text-[#8B6F47]" />
+                  <h3 className="font-bold text-sm text-gray-900">Tour Discussion</h3>
                 </div>
                 <button 
                   onClick={() => setChatOpen(false)}
-                  className="p-1 hover:bg-slate-800 rounded-lg text-slate-400"
+                  className="p-1 hover:bg-[#F5F0E8] rounded-lg text-gray-500 transition"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Chat Messages */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-3">
+              <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#FAF7F2]">
                 {chatMessages.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-slate-500">
-                    No messages yet. Ask the host about parking, utilities, or lease conditions!
+                  <div className="text-center py-8 text-xs text-gray-400">
+                    No messages yet. Ask the host about parking, utilities, or move-in dates!
                   </div>
                 ) : (
                   chatMessages.map(msg => (
@@ -1196,14 +1226,14 @@ export default function VirtualTour() {
                       key={msg.id} 
                       className={`flex flex-col ${msg.sender === userName ? 'items-end' : 'items-start'}`}
                     >
-                      <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mb-0.5">
-                        <span className="font-semibold text-slate-300">{msg.sender}</span>
+                      <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mb-0.5">
+                        <span className="font-bold text-gray-700">{msg.sender}</span>
                         <span>{msg.timestamp}</span>
                       </div>
                       <div className={`p-2.5 rounded-2xl text-xs max-w-[85%] ${
                         msg.sender === userName 
-                          ? 'bg-red-600 text-white rounded-tr-none' 
-                          : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-none'
+                          ? 'bg-[#A67C52] text-white rounded-tr-none shadow-xs' 
+                          : 'bg-white border border-[#EADBCC] text-gray-800 rounded-tl-none shadow-xs'
                       }`}>
                         {msg.message}
                       </div>
@@ -1214,17 +1244,17 @@ export default function VirtualTour() {
               </div>
 
               {/* Chat Input Box */}
-              <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-800 flex gap-2">
+              <form onSubmit={handleSendMessage} className="p-3 border-t border-[#EADBCC] bg-white flex gap-2">
                 <input 
                   type="text" 
                   value={chatInput} 
                   onChange={(e) => setChatInput(e.target.value)}
                   placeholder="Ask a question..." 
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500"
+                  className="flex-1 bg-[#FAF7F2] border border-[#EADBCC] focus:border-[#A67C52] focus:bg-white rounded-xl px-3 py-2 text-xs text-gray-900 outline-none"
                 />
                 <button 
                   type="submit" 
-                  className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-xl transition"
+                  className="p-2 bg-[#A67C52] hover:bg-[#8B6F47] text-white rounded-xl shadow-xs transition"
                 >
                   <Send className="w-4 h-4" />
                 </button>
