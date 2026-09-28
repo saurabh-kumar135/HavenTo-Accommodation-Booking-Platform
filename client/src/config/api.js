@@ -6,21 +6,22 @@ export const getApiUrl = () => {
       return import.meta.env.VITE_API_URL || 'http://localhost:3009';
     }
   }
-  return import.meta.env.VITE_API_URL || 'https://havento-accommodation-booking-platform.onrender.com';
+  return import.meta.env.VITE_API_URL || '';
 };
 
 export const API_URL = getApiUrl();
 
-// Dedicated WebRTC Signaling Server URL (always points to the active Render socket.io server)
+// Dedicated WebRTC Signaling Server URL
 export const TOUR_API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
   ? (import.meta.env.VITE_API_URL || 'http://localhost:3009')
-  : 'https://havento-accommodation-booking-platform.onrender.com';
+  : 'http://65.0.71.84';
 
 export const getImageUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http')) return path;
-  if (path.startsWith('uploads/')) return `${API_URL}/${path}`;
-  return `${API_URL}/uploads/${path}`;
+  if (path.startsWith('/uploads/')) return path;
+  if (path.startsWith('uploads/')) return `/${path}`;
+  return `/uploads/${path}`;
 };
 
 export default { API_URL, TOUR_API_URL, getImageUrl };
