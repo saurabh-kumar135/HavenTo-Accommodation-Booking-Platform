@@ -136,3 +136,5 @@ sessions/
 
 # Optional: Ignore brain/artifacts directory (Gemini AI artifacts)
 .gemini/
+.vercel
+.env*
