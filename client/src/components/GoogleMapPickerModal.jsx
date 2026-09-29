@@ -96,6 +96,7 @@ const GoogleMapPickerModal = ({
   const [geoError, setGeoError] = useState('');
   const [locationOff, setLocationOff] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [showGpsNotice, setShowGpsNotice] = useState(false);
   const [mapLayerType, setMapLayerType] = useState(() => {
     try {
       return localStorage.getItem('havento_map_layer') || 'googleSat';
@@ -299,6 +300,7 @@ const GoogleMapPickerModal = ({
 
   // Bulletproof Real-Time GPS Acquisition with explicit Device Location Prompt
   const handleUseCurrentLocation = async () => {
+    setShowGpsNotice(true);
     setLocating(true);
     setGeoError('');
     setLocationOff(false);
@@ -325,6 +327,7 @@ const GoogleMapPickerModal = ({
         const perm = await navigator.permissions.query({ name: 'geolocation' });
         if (perm.state === 'denied') {
           setPermissionDenied(true);
+          setShowGpsNotice(true);
           setLocating(false);
           setStatusMsg('');
           return;
@@ -352,6 +355,7 @@ const GoogleMapPickerModal = ({
       if (isGenericCentroid(rawLat, rawLng, accuracy)) {
         if (isFinal) {
           setLocationOff(true);
+          setShowGpsNotice(true);
           setLocating(false);
           setStatusMsg('');
         }
@@ -383,7 +387,10 @@ const GoogleMapPickerModal = ({
         } else {
           setStatusMsg('GPS location locked (~' + Math.round(accuracy) + 'm accuracy)');
         }
-        setTimeout(() => setStatusMsg(''), 5000);
+        setTimeout(() => {
+          setStatusMsg('');
+          setShowGpsNotice(false);
+        }, 4000);
       }
     };
 
@@ -414,6 +421,7 @@ const GoogleMapPickerModal = ({
           setLocating(false);
           setStatusMsg('');
           setLocationOff(true);
+          setShowGpsNotice(true);
         }
       }
     }, 15000);
@@ -435,6 +443,7 @@ const GoogleMapPickerModal = ({
         setLocating(false);
         setStatusMsg('');
         setPermissionDenied(true);
+        setShowGpsNotice(true);
         return;
       }
 
@@ -449,6 +458,7 @@ const GoogleMapPickerModal = ({
         setLocating(false);
         setStatusMsg('');
         setLocationOff(true);
+        setShowGpsNotice(true);
         return;
       }
 
@@ -787,92 +797,153 @@ const GoogleMapPickerModal = ({
               type="button"
               onClick={handleUseCurrentLocation}
               disabled={locating}
-              className="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs"
-              title="Auto-detect exact GPS location on the first tap"
+              className="px-3.5 py-2.5 bg-[#FAF7F2] hover:bg-[#F3ECE1] text-[#7A552F] border border-[#DDD1C3] text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs active:scale-95 disabled:opacity-75"
+              title="Detect exact rooftop GPS location"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={'w-4 h-4 ' + (locating ? 'animate-spin' : '')}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                <circle cx="12" cy="12" r="3" strokeWidth="2.5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v3m0 14v3M2 12h3m14 0h3" />
               </svg>
-              <span>{locating ? 'Locking GPS...' : 'GPS'}</span>
+              <span>{locating ? 'Locating...' : 'GPS'}</span>
             </button>
           </form>
 
-          {statusMsg && (
-            <p className="text-xs text-blue-700 font-medium bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1.5 animate-fadeIn">
-              <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping shrink-0" />
-              <span>{statusMsg}</span>
-            </p>
-          )}
+          {/* Elegant GPS Guidance & Location Notice Card */}
+          {showGpsNotice && (
+            <div className="relative overflow-hidden bg-gradient-to-br from-[#FAF8F5] via-[#F6F1EA] to-[#F1E9DE] border border-[#E4D8CA] rounded-2xl p-4 shadow-sm transition-all animate-fadeIn">
+              {/* Close button */}
+              <button
+                type="button"
+                onClick={() => setShowGpsNotice(false)}
+                className="absolute top-3.5 right-3.5 p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-200/50 rounded-lg transition cursor-pointer"
+                aria-label="Dismiss notice"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
 
-          {/* Location / GPS Turned OFF Warning Banner */}
-          {locationOff && (
-            <div className="bg-amber-50 border border-amber-300 rounded-xl p-3.5 text-xs text-amber-900 flex flex-col gap-2.5 animate-fadeIn shadow-xs">
-              <div className="flex items-start gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 text-amber-700 font-bold text-base shadow-xs">
-                  📍
+              <div className="flex items-start gap-3.5 pr-6">
+                {/* Visual Icon Badge */}
+                <div className="relative w-10 h-10 rounded-2xl bg-white shadow-xs border border-[#E6DDD2] flex items-center justify-center shrink-0 text-[#8B653D]">
+                  {locating ? (
+                    <div className="relative flex items-center justify-center">
+                      <span className="absolute w-7 h-7 rounded-full bg-[#A67C52]/25 animate-ping" />
+                      <svg className="w-5 h-5 text-[#8B653D]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <circle cx="12" cy="12" r="3" fill="currentColor" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+                      </svg>
+                    </div>
+                  ) : permissionDenied ? (
+                    <svg className="w-5 h-5 text-rose-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  ) : locationOff ? (
+                    <svg className="w-5 h-5 text-amber-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <circle cx="12" cy="12" r="9" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m15 9-6 6m0-6 6 6" />
+                    </svg>
+                  ) : statusMsg && statusMsg.includes('locked') ? (
+                    <svg className="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-[#8B653D]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <circle cx="12" cy="12" r="3" fill="currentColor" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+                    </svg>
+                  )}
                 </div>
-                <div className="flex-1">
-                  <p className="font-bold text-amber-950 text-xs sm:text-sm">
-                    Device Location (GPS) is Turned OFF
-                  </p>
-                  <p className="text-amber-800 text-[11px] sm:text-xs mt-0.5 leading-relaxed">
-                    Until you turn on Location in your phone, the browser cannot find your exact house. Swipe down from the top of your phone screen, turn <b>ON</b> the <b>Location / GPS</b> toggle, and tap the button below.
-                  </p>
+
+                <div className="flex-1 min-w-0">
+                  {permissionDenied ? (
+                    <>
+                      <h4 className="font-bold text-stone-900 text-xs sm:text-sm tracking-tight">
+                        Location Access Blocked
+                      </h4>
+                      <p className="text-stone-600 text-[11px] sm:text-xs mt-0.5 leading-relaxed">
+                        Your browser blocked location access for this site. Tap the <b>tune / lock icon (⊶)</b> in your address bar → <b>Permissions</b> → switch <b>Location</b> to <b>Allow</b>.
+                      </p>
+                      <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[#E8DFD5]">
+                        <button
+                          type="button"
+                          onClick={handleUseCurrentLocation}
+                          className="px-3.5 py-1.5 bg-[#8B653D] hover:bg-[#735330] text-white rounded-xl font-medium text-xs transition shadow-xs cursor-pointer"
+                        >
+                          Retry Access
+                        </button>
+                      </div>
+                    </>
+                  ) : locationOff ? (
+                    <>
+                      <h4 className="font-bold text-stone-900 text-xs sm:text-sm tracking-tight">
+                        Turn On Device Location
+                      </h4>
+                      <p className="text-stone-600 text-[11px] sm:text-xs mt-0.5 leading-relaxed">
+                        Device location (GPS) is currently off. Swipe down your phone&apos;s notification panel, turn on <b>Location / GPS</b>, then tap retry.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-[#E8DFD5]">
+                        <button
+                          type="button"
+                          onClick={handleUseCurrentLocation}
+                          className="px-3.5 py-1.5 bg-[#8B653D] hover:bg-[#735330] text-white rounded-xl font-medium text-xs transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                        >
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                          </svg>
+                          <span>Turned On — Retry GPS</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLocationOff(false);
+                            setShowGpsNotice(false);
+                            fetchIpLocation('approximate network location');
+                          }}
+                          className="px-3 py-1.5 bg-white hover:bg-stone-50 border border-stone-300 text-stone-700 rounded-xl font-medium text-xs transition cursor-pointer"
+                        >
+                          Use Approximate City
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h4 className="font-bold text-stone-900 text-xs sm:text-sm tracking-tight flex items-center gap-2">
+                        <span>Turn On Device Location</span>
+                        {locating && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white text-[#8B653D] text-[10px] font-semibold border border-[#E6DDD2] shadow-2xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#8B653D] animate-ping" />
+                            <span>Locking Satellites</span>
+                          </span>
+                        )}
+                        {!locating && statusMsg && statusMsg.includes('locked') && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-semibold border border-emerald-200">
+                            <span>Locked</span>
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-stone-600 text-[11px] sm:text-xs mt-0.5 leading-relaxed">
+                        Please make sure your device&apos;s <b>Location (GPS)</b> is turned on to pinpoint your exact house rooftop on the map.
+                      </p>
+                      {statusMsg && (
+                        <p className="text-[11px] font-medium text-[#7A5731] mt-1.5 flex items-center gap-1.5">
+                          {locating && (
+                            <svg className="w-3.5 h-3.5 animate-spin text-[#8B653D]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v3m0 12v3M3 12h3m12 0h3" />
+                            </svg>
+                          )}
+                          <span>{statusMsg}</span>
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-200/80">
-                <button
-                  type="button"
-                  onClick={handleUseCurrentLocation}
-                  className="px-3.5 py-2 bg-[#A67C52] hover:bg-[#8B6F47] text-white rounded-lg font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-xs"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-                  </svg>
-                  <span>I Turned It ON — Retry GPS</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLocationOff(false);
-                    fetchIpLocation('approximate network location');
-                  }}
-                  className="px-3 py-2 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 rounded-lg font-medium text-xs transition cursor-pointer"
-                >
-                  Use Approximate City (Network)
-                </button>
               </div>
             </div>
           )}
 
-          {/* Browser Permission Denied Warning Banner */}
-          {permissionDenied && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-900 flex flex-col gap-2.5 animate-fadeIn shadow-xs">
-              <div className="flex items-start gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0 text-red-700 font-bold text-base">
-                  🚫
-                </div>
-                <div className="flex-1">
-                  <p className="font-bold text-red-950 text-xs sm:text-sm">Location Permission Blocked</p>
-                  <p className="text-red-800 text-[11px] sm:text-xs mt-0.5 leading-relaxed">
-                    Your browser blocked location access for this website. Tap the <b>lock or tune icon (🔒)</b> in your browser address bar → select <b>Permissions</b> → set <b>Location</b> to <b>Allow</b>, then tap retry.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 pt-1 border-t border-red-200/80">
-                <button
-                  type="button"
-                  onClick={handleUseCurrentLocation}
-                  className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs transition cursor-pointer"
-                >
-                  🔄 Retry Permission
-                </button>
-              </div>
-            </div>
-          )}
-
-          {geoError && !locationOff && !permissionDenied && (
+          {geoError && !showGpsNotice && (
             <p className="text-xs text-amber-700 font-medium bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
               {geoError}
             </p>
