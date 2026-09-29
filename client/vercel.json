@@ -2,11 +2,19 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "http://65.0.71.84/api/$1"
+      "destination": "https://havento.duckdns.org/api/$1"
     },
     {
       "source": "/uploads/(.*)",
-      "destination": "http://65.0.71.84/uploads/$1"
+      "destination": "https://havento.duckdns.org/uploads/$1"
+    },
+    {
+      "source": "/host/uploads/(.*)",
+      "destination": "https://havento.duckdns.org/host/uploads/$1"
+    },
+    {
+      "source": "/homes/uploads/(.*)",
+      "destination": "https://havento.duckdns.org/homes/uploads/$1"
     },
     {
       "source": "/(.*)",
