@@ -94,6 +94,8 @@ const GoogleMapPickerModal = ({
   const [locating, setLocating] = useState(false);
   const [searching, setSearching] = useState(false);
   const [geoError, setGeoError] = useState('');
+  const [locationOff, setLocationOff] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const [mapLayerType, setMapLayerType] = useState(() => {
     try {
       return localStorage.getItem('havento_map_layer') || 'googleSat';
@@ -295,15 +297,41 @@ const GoogleMapPickerModal = ({
     return false;
   };
 
-  // Bulletproof First-Tap Real-Time GPS Acquisition (Zero 3-Chances Requirement)
-  const handleUseCurrentLocation = () => {
+  // Bulletproof Real-Time GPS Acquisition with explicit Device Location Prompt
+  const handleUseCurrentLocation = async () => {
     setLocating(true);
     setGeoError('');
-    setStatusMsg('Locking onto GPS satellites...');
+    setLocationOff(false);
+    setPermissionDenied(false);
+    setStatusMsg('Connecting to GPS satellites...');
 
     if (!navigator.geolocation) {
-      fetchIpLocation('GPS not supported, using network location');
+      setGeoError('GPS is not supported by your current browser.');
+      setLocating(false);
+      setStatusMsg('');
       return;
+    }
+
+    if (typeof window !== 'undefined' && !window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      setGeoError('⚠️ Location requires a secure HTTPS connection. Please access this website over HTTPS.');
+      setLocating(false);
+      setStatusMsg('');
+      return;
+    }
+
+    // Check browser permissions query if available
+    if (typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
+      try {
+        const perm = await navigator.permissions.query({ name: 'geolocation' });
+        if (perm.state === 'denied') {
+          setPermissionDenied(true);
+          setLocating(false);
+          setStatusMsg('');
+          return;
+        }
+      } catch (err) {
+        // Permissions query not supported in all browsers
+      }
     }
 
     if (watchIdRef.current !== null) {
@@ -323,7 +351,9 @@ const GoogleMapPickerModal = ({
 
       if (isGenericCentroid(rawLat, rawLng, accuracy)) {
         if (isFinal) {
-          await fetchIpLocation('GPS gave generic result, using network location');
+          setLocationOff(true);
+          setLocating(false);
+          setStatusMsg('');
         }
         return;
       }
@@ -345,6 +375,9 @@ const GoogleMapPickerModal = ({
 
       if (isFinal) {
         setLocating(false);
+        setLocationOff(false);
+        setPermissionDenied(false);
+        setGeoError('');
         if (accuracy <= 30) {
           setStatusMsg('Exact rooftop GPS locked (~' + Math.round(accuracy) + 'm accuracy)');
         } else {
@@ -367,8 +400,7 @@ const GoogleMapPickerModal = ({
       await applyCoordsToMap(coords, true);
     };
 
-    // Settle timer: gives hardware GPS up to 10 seconds to lock sub-30m satellites.
-    // If it doesn't reach <= 30m, use best reading seen (e.g. 45m indoor WiFi fix) rather than failing!
+    // Settle timer: gives hardware GPS up to 15 seconds to lock satellites
     const settleTimer = setTimeout(() => {
       if (!finalized) {
         if (bestReading) {
@@ -379,76 +411,21 @@ const GoogleMapPickerModal = ({
             navigator.geolocation.clearWatch(watchIdRef.current);
             watchIdRef.current = null;
           }
-          fetchIpLocation('GPS timeout, using network location');
+          setLocating(false);
+          setStatusMsg('');
+          setLocationOff(true);
         }
       }
-    }, 10000);
+    }, 15000);
 
-    // Step 1: Fast Cache Check (< 200ms)
-    // If device has a recent GPS fix within 2 minutes, apply it IMMEDIATELY on the very 1st tap!
-    try {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          if (finalized) return;
-          const coords = pos.coords;
-          if (!bestReading || coords.accuracy < bestReading.accuracy) {
-            bestReading = coords;
-          }
-          // If cached fix is already high-precision (<= 35m), pin it immediately!
-          if (coords.accuracy <= 35) {
-            applyCoordsToMap(coords, false);
-            setStatusMsg('Instant GPS lock (~' + Math.round(coords.accuracy) + 'm). Refining satellites...');
-          }
-        },
-        (err) => {
-          if (err && err.code === 1) {
-            // Permission denied
-            finalized = true;
-            clearTimeout(settleTimer);
-            if (watchIdRef.current !== null) {
-              navigator.geolocation.clearWatch(watchIdRef.current);
-              watchIdRef.current = null;
-            }
-            setLocating(false);
-            setStatusMsg('');
-            setGeoError('Location permission denied. Please allow location access in your browser settings.');
-          }
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 3000,
-          maximumAge: 120000, // 2-minute cache acceptable for instant initial pin
-        }
-      );
-    } catch (e) {
-      console.warn('Fast geolocation error:', e);
-    }
-
-    // Step 2: Live Progressive Satellite Fix
-    // Listens to hardware GPS updates, smoothly refining down to exact rooftop level
-    const onWatchPos = (pos) => {
+    const handleGeoError = (err) => {
       if (finalized) return;
-      const coords = pos.coords;
-      const acc = coords.accuracy;
 
-      if (!bestReading || acc <= bestReading.accuracy) {
-        bestReading = coords;
-        // Move pin to current best coordinates immediately
-        applyCoordsToMap(coords, false);
-      }
+      const code = err ? err.code : 0;
+      const msg = err && err.message ? err.message.toLowerCase() : '';
 
-      // If accuracy <= 30m, we have locked high-precision satellites!
-      if (acc <= 30) {
-        finalize(coords);
-      } else {
-        setStatusMsg('Refining satellite lock... accuracy ~' + Math.round(acc) + 'm');
-      }
-    };
-
-    const onWatchError = (err) => {
-      if (finalized) return;
-      if (err && err.code === 1) {
-        // Permission denied
+      // Code 1: PERMISSION_DENIED
+      if (code === 1 || msg.includes('denied')) {
         finalized = true;
         clearTimeout(settleTimer);
         if (watchIdRef.current !== null) {
@@ -457,10 +434,43 @@ const GoogleMapPickerModal = ({
         }
         setLocating(false);
         setStatusMsg('');
-        setGeoError('Location permission denied. Please allow location access in your browser settings.');
+        setPermissionDenied(true);
         return;
       }
 
+      // Code 2: POSITION_UNAVAILABLE (GPS / Location toggle turned OFF on device!)
+      if (code === 2 || msg.includes('unavailable') || msg.includes('turned off') || msg.includes('disabled')) {
+        finalized = true;
+        clearTimeout(settleTimer);
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
+        setLocating(false);
+        setStatusMsg('');
+        setLocationOff(true);
+        return;
+      }
+
+      // Code 3: TIMEOUT
+      if (code === 3) {
+        if (bestReading) {
+          finalize(bestReading);
+        } else {
+          finalized = true;
+          clearTimeout(settleTimer);
+          if (watchIdRef.current !== null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+          }
+          setLocating(false);
+          setStatusMsg('');
+          setLocationOff(true);
+        }
+        return;
+      }
+
+      // Other generic error
       if (bestReading) {
         finalize(bestReading);
       } else {
@@ -470,26 +480,71 @@ const GoogleMapPickerModal = ({
           navigator.geolocation.clearWatch(watchIdRef.current);
           watchIdRef.current = null;
         }
-        fetchIpLocation('GPS unavailable, using network location');
+        setLocating(false);
+        setStatusMsg('');
+        setLocationOff(true);
+      }
+    };
+
+    // Step 1: Fast Cache Check (< 200ms) with 6-second timeout
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (finalized) return;
+          const coords = pos.coords;
+          if (!bestReading || coords.accuracy < bestReading.accuracy) {
+            bestReading = coords;
+          }
+          if (coords.accuracy <= 35) {
+            applyCoordsToMap(coords, false);
+            setStatusMsg('Instant GPS lock (~' + Math.round(coords.accuracy) + 'm). Refining satellites...');
+          }
+        },
+        (err) => {
+          if (err && (err.code === 1 || err.code === 2)) {
+            handleGeoError(err);
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 6000,
+          maximumAge: 60000,
+        }
+      );
+    } catch (e) {
+      console.warn('Fast geolocation error:', e);
+    }
+
+    // Step 2: Live Progressive Satellite Fix (15-second timeout for hardware satellite lock)
+    const onWatchPos = (pos) => {
+      if (finalized) return;
+      const coords = pos.coords;
+      const acc = coords.accuracy;
+
+      if (!bestReading || acc <= bestReading.accuracy) {
+        bestReading = coords;
+        applyCoordsToMap(coords, false);
+      }
+
+      if (acc <= 25) {
+        finalize(coords);
+      } else {
+        setStatusMsg('Refining satellite lock... accuracy ~' + Math.round(acc) + 'm');
       }
     };
 
     try {
       watchIdRef.current = navigator.geolocation.watchPosition(
         onWatchPos,
-        onWatchError,
+        handleGeoError,
         {
           enableHighAccuracy: true,
-          timeout: 12000,
+          timeout: 15000,
           maximumAge: 0,
         }
       );
     } catch (e) {
-      if (bestReading) {
-        finalize(bestReading);
-      } else {
-        fetchIpLocation('GPS error, using network location');
-      }
+      handleGeoError(e);
     }
   };
 
@@ -750,7 +805,74 @@ const GoogleMapPickerModal = ({
             </p>
           )}
 
-          {geoError && (
+          {/* Location / GPS Turned OFF Warning Banner */}
+          {locationOff && (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-3.5 text-xs text-amber-900 flex flex-col gap-2.5 animate-fadeIn shadow-xs">
+              <div className="flex items-start gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 text-amber-700 font-bold text-base shadow-xs">
+                  📍
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-amber-950 text-xs sm:text-sm">
+                    Device Location (GPS) is Turned OFF
+                  </p>
+                  <p className="text-amber-800 text-[11px] sm:text-xs mt-0.5 leading-relaxed">
+                    Until you turn on Location in your phone, the browser cannot find your exact house. Swipe down from the top of your phone screen, turn <b>ON</b> the <b>Location / GPS</b> toggle, and tap the button below.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-200/80">
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  className="px-3.5 py-2 bg-[#A67C52] hover:bg-[#8B6F47] text-white rounded-lg font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
+                  <span>I Turned It ON — Retry GPS</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocationOff(false);
+                    fetchIpLocation('approximate network location');
+                  }}
+                  className="px-3 py-2 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 rounded-lg font-medium text-xs transition cursor-pointer"
+                >
+                  Use Approximate City (Network)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Browser Permission Denied Warning Banner */}
+          {permissionDenied && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-900 flex flex-col gap-2.5 animate-fadeIn shadow-xs">
+              <div className="flex items-start gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0 text-red-700 font-bold text-base">
+                  🚫
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-red-950 text-xs sm:text-sm">Location Permission Blocked</p>
+                  <p className="text-red-800 text-[11px] sm:text-xs mt-0.5 leading-relaxed">
+                    Your browser blocked location access for this website. Tap the <b>lock or tune icon (🔒)</b> in your browser address bar → select <b>Permissions</b> → set <b>Location</b> to <b>Allow</b>, then tap retry.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-1 border-t border-red-200/80">
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs transition cursor-pointer"
+                >
+                  🔄 Retry Permission
+                </button>
+              </div>
+            </div>
+          )}
+
+          {geoError && !locationOff && !permissionDenied && (
             <p className="text-xs text-amber-700 font-medium bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
               {geoError}
             </p>
